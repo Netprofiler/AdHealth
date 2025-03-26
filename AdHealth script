@@ -70,9 +70,6 @@ function adHealthCheck(spreadsheetUrl) {
       sendEmail(mailadres, "Monthly");
     }
 
-    if(hour == 23) {
-      updateInactiveAccounts();
-    }
   } else if (mailadres.length == 0 || accountLabel.length == 0){
     Logger.log("Mailaddress and/or account label not provided");
   }
