@@ -1,5 +1,53 @@
 function adHealthCheck(spreadsheetUrl) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
+  Logger.log("Good job, you're using the latest version: 1.11")
+
+  /**
+ * Changelog - Script Updates
+ * 
+ * Version v1.11 – 2025-03-10
+ * - Fixed issues related to disapproved products in the script.
+ * 
+ * Version v1.10 – 2025-01-29
+ * - Added UTM tagging and active keyword/ad check to the AdHealth script.
+ * - Implemented fixes for the link checker.
+ * 
+ * Version v1.9 – 2024-12-09
+ * - Added check for disapproved Pmax asset groups in disapproved ads.
+ * 
+ * Version v1.8 – 2024-11-28
+ * - Fixed bugs in AdHealth script.
+ * 
+ * Version v1.7 – 2024-11-25
+ * - Added Lin Rodnitzky Ratio to the AdHealth script.
+ * 
+ * Version v1.6 – 2024-11-01
+ * - Updated UTM script for Performance Max (Pmax) campaigns.
+ * 
+ * Version v1.5 – 2024-08-19
+ * - Enabled users to whitelist their own email addresses for the unknown user check.
+ * 
+ * Version v1.4 – 2024-08-02
+ * - Fixed bugs in the link checker.
+ * 
+ * Version v1.3 – 2024-07-09
+ * - Bug fixes related to the clear daily log functionality.
+ * 
+ * Version v1.2 – 2024-05-30
+ * - Addressed issues with the conversion recency script; applied upper limit only for budget logic.
+ * 
+ * Version v1.1 – 2024-05-02
+ * - Updated budget scripting logic.
+ * 
+ * Version v1.0.1 – 2024-04-11
+ * - Added tracking for days since last conversion.
+ * - General bug fixes.
+ * 
+ * Version v1.0 – 2024-01-17
+ * - Initial version of the script.
+ */
+
+  
   var spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
   var shortUrl = spreadsheetUrl;
 
