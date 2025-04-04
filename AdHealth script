@@ -2413,7 +2413,7 @@ function adHealthCheck(spreadsheetUrl) {
         api_key: apiKey,
         sender: "ga@netprofiler.nl",
         to: [mailadres],
-        subject: frequency + " issues found",
+        subject: "AdHealth alerts",
         html_body: emailBody,
       };
       
