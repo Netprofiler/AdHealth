@@ -1695,7 +1695,7 @@ function adHealthCheck(spreadsheetUrl) {
       while (campaignIterator.hasNext()) {
         var campaign = campaignIterator.next();
         try {
-          var trackingTemplate = "utm_source=google&utm_medium=cpc&utm_campaign="+encodeURIComponent(campaign.getName())+"}&utm_id=" + campaign.getId()+"&utm_term={keyword}";
+          var trackingTemplate = "utm_source=google&utm_medium=cpc&utm_campaign="+encodeURIComponent(campaign.getName())+"&utm_id=" + campaign.getId()+"&utm_term={keyword}";
           campaign.urls().setFinalUrlSuffix(trackingTemplate);
         } catch (e) {
           Logger.log("Error processing campaign " + campaign.getId() + " in " + campaignType + ": " + e.message);
