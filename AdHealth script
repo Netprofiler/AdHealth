@@ -102,7 +102,9 @@ function adHealthCheck(spreadsheetUrl) {
     }
 
     // Send email with foundings od last run in case it timed out
-    sendEmail(mailadres)
+    if(hour > 6){
+      sendEmail(mailadres);
+    }
 
     // Run checks
     if(weekDay != "Saturday" && hour > 2 && hour < 23) {
