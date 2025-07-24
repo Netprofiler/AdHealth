@@ -6,10 +6,10 @@ function adHealthCheck(spreadsheetUrl) {
  * Changelog - Script Updates
  *
  * Version v1.14 – 2025-07-24
- * - Exclude ended campaigns for tROAS check
+ * - Exclude ended campaigns for tROAS check.
  * 
  * Version v1.13 – 2025-07-23
- * - Send issues left from last run, which may not been send if the script timed-out
+ * - Send issues left from last run, which may not been send if the script timed-out.
  * 
  * Version v1.12 – 2025-06-24
  * - Fixed issues related to clearing the montly log sheet.
