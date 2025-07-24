@@ -1,6 +1,6 @@
 function adHealthCheck(spreadsheetUrl) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 1.13")
+  Logger.log("Good job, you're using the latest version: 1.13.1")
 
   /**
  * Changelog - Script Updates
