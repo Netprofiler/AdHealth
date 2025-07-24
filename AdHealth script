@@ -101,7 +101,7 @@ function adHealthCheck(spreadsheetUrl) {
       clearLog("Monthly");
     }
 
-    // Send email with foundings od last run in case it timed out
+    // Send email with foundings of last run in case it timed out
     if(hour > 6){
       sendEmail(mailadres);
     }
