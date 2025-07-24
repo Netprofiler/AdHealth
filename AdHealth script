@@ -5,7 +5,10 @@ function adHealthCheck(spreadsheetUrl) {
   /**
  * Changelog - Script Updates
  *
- * Version v1.13 – 2025-06-24
+ * Version v1.14 – 2025-07-24
+ * - Exclude ended campaigns for tROAS check
+ * 
+ * Version v1.13 – 2025-07-23
  * - Send issues left from last run, which may not been send if the script timed-out
  * 
  * Version v1.12 – 2025-06-24
@@ -1306,7 +1309,7 @@ function adHealthCheck(spreadsheetUrl) {
       var report = AdsApp.report(
           "SELECT campaign.name, campaign.maximize_conversion_value.target_roas, campaign.target_roas.target_roas, " +
           "bidding_strategy.target_roas.target_roas, bidding_strategy.maximize_conversion_value.target_roas " +
-          "FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT'");
+          "FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT' AND campaign.end_date > '" + todayString + "'");
       
       var rows = report.rows();
       while (rows.hasNext()) {
