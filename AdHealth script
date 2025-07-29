@@ -1,10 +1,13 @@
 function adHealthCheck(spreadsheetUrl) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 1.13.1")
+  Logger.log("Good job, you're using the latest version: 1.15")
 
   /**
  * Changelog - Script Updates
  *
+ * Version v1.15 – 2025-07-29
+ * - Improve active ad and keyword check. Making it faster by using Google Ads query. Remove some logging.
+ * 
  * Version v1.14 – 2025-07-24
  * - Exclude ended campaigns for tROAS check.
  * 
@@ -207,7 +210,6 @@ function adHealthCheck(spreadsheetUrl) {
               disapprovedAdsCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'Link Checker':
-              Logger.log('Run link checker')
               linkChcker(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'New conversions found':
@@ -256,7 +258,6 @@ function adHealthCheck(spreadsheetUrl) {
               budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, i, limitType);
               break;
             case 'Conversion recency check':
-              Logger.log('Run conversion recency check')
               var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + 3;
               var daysToCheck = settingsSheet.getRange(i + 7, daysToCheckPosition).getValue();
               daysSinceLastConversion(frequency, accountNames[i], logSheet, mailbodySheet, accountId, daysToCheck);
@@ -667,7 +668,7 @@ function adHealthCheck(spreadsheetUrl) {
       query.exportToSheet(linkCheckerLogSheet);
     
       // Get check URLs and set in a string
-      Logger.log(linkCheckerLogSheet.getLastRow())
+      //Logger.log(linkCheckerLogSheet.getLastRow())
       if(linkCheckerLogSheet.getLastRow() > 1) {
         var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
         var adgroupAssetValues = range.getValues();
@@ -675,7 +676,7 @@ function adHealthCheck(spreadsheetUrl) {
       
       var urlValues = [];
       var urlValues = urlValues.concat(adValues, assetGroupValues, accountAssetValues, campaignAssetValues, adgroupAssetValues).flat();
-      Logger.log(urlValues)
+      //Logger.log(urlValues)
             
       // Remove empty values and deduplicate
       var deduplicatedUrls = Array.from(new Set(urlValues.filter(function(value) {
@@ -683,7 +684,7 @@ function adHealthCheck(spreadsheetUrl) {
           return value && value.trim() !== '';
       })));
 
-      Logger.log(deduplicatedUrls.length + ": " + deduplicatedUrls)
+      //Logger.log(deduplicatedUrls.length + ": " + deduplicatedUrls)
       
       // Get all the urls of this accountname and remove them from the deduplcated list. These URL's won't be checked again on the same day
       var lastRow = checkedLinksSheet.getLastRow();
@@ -742,7 +743,7 @@ function adHealthCheck(spreadsheetUrl) {
       
       // All broken links are collected at this point. These are broken links from ads and assets.
       if(brokenUrls.length > 0){
-        Logger.log("Broken links found: " + brokenUrls.length + " : " + brokenUrls)
+        //Logger.log("Broken links found: " + brokenUrls.length + " : " + brokenUrls)
         var brokenUrlsString = brokenUrls.join("','");
         
         // Export all ads with broken url to a sheet
@@ -1138,13 +1139,13 @@ function adHealthCheck(spreadsheetUrl) {
     
     function getStatusCodes (response, finalUrl){
       var statusCode = response.getResponseCode();
-      Logger.log("Bulk check: " + statusCode + " - " + finalUrl);
+      //Logger.log("Bulk check: " + statusCode + " - " + finalUrl);
       if(statusCode != 200){
         logBrokenLink(finalUrl);
-        Logger.log(statusCode + " - " + finalUrl)
+        //Logger.log(statusCode + " - " + finalUrl)
       } else {
         logWorkingLink(finalUrl);
-        Logger.log(statusCode + " - " + finalUrl)
+        //Logger.log(statusCode + " - " + finalUrl)
       }
     }
     
@@ -1152,7 +1153,7 @@ function adHealthCheck(spreadsheetUrl) {
       try{
         var response = UrlFetchApp.fetch(finalUrl);
         var statusCode = response.getResponseCode();
-        Logger.log("Individual check: " + statusCode + " - " + finalUrl);
+        //Logger.log("Individual check: " + statusCode + " - " + finalUrl);
         if(statusCode != 200){
           logBrokenLink(finalUrl, statusCode);
         } else {
@@ -1165,7 +1166,7 @@ function adHealthCheck(spreadsheetUrl) {
     
     // If a link is broken it's logged in a sheet. When the found to be broken during the second time then it will be added to the alert
     function logBrokenLink(finalUrl, statusCode) {
-      Logger.log(statusCode + " - " + finalUrl)
+      //Logger.log(statusCode + " - " + finalUrl)
       var lastRow = brokenLinksSheet.getLastRow();
         if(lastRow > 1) {
         var urlsRange = brokenLinksSheet.getRange(1, 1, lastRow, 1); // Assuming URLs are in column A starting from row 1
@@ -1195,7 +1196,7 @@ function adHealthCheck(spreadsheetUrl) {
     
     // Log all working links so they don't have to be checked in other runs on the same day
     function logWorkingLink(finalUrl, statusCode) {
-      Logger.log(statusCode + " - " + finalUrl)
+      //Logger.log(statusCode + " - " + finalUrl)
       // Fetch existing URLs from Column A, starting from row 1
       var lastRow = checkedLinksSheet.getLastRow();
       var range = checkedLinksSheet.getRange('A1:A' + lastRow);
@@ -1735,77 +1736,117 @@ function adHealthCheck(spreadsheetUrl) {
       var account = accountIterator.next();
       AdsManagerApp.select(account);
 
-      // get active campaigns
-      var campaigns = AdsApp.campaigns()
-        .withCondition("Status = ENABLED")
-        .withCondition('campaign.experiment_type = BASE')
-        .withCondition('campaign.end_date > "' + todayString + '"')
-        .get();
+      var adGroupsWithAds = new Set();
+      var adGroupsWithKeywords = new Set();
+      var allAdGroups = new Map();
+      var allKeywordAdGroups = new Map();
+      var rowsToAppend = [];
 
-      // Iterate over active campaigns.
-      while (campaigns.hasNext()) {
-        var campaign = campaigns.next();
+      // --- 1. Alle actieve ad groups ophalen ---
+      var adGroupQuery = `
+        SELECT campaign.id, ad_group.id, ad_group.name, campaign.name
+        FROM ad_group
+        WHERE ad_group.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND campaign.experiment_type = 'BASE'
+          AND campaign.end_date > '` + todayString + `' 
+      `;
+      var adGroupRows = AdsApp.search(adGroupQuery);
+      while (adGroupRows.hasNext()) {
+        var row = adGroupRows.next();
+        allAdGroups.set(row.adGroup.id, {
+          campaignName: row.campaign.name,
+          adGroupName: row.adGroup.name
+        });
+      }
 
-        // Get active ad groups
-        var adGroups = campaign.adGroups()
-          .withCondition('Status = ENABLED')
-          .get();
+      // --- 2. Alle actieve advertenties per ad group ---
+      var adQuery = `
+        SELECT ad_group.id
+        FROM ad_group_ad
+        WHERE ad_group_ad.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND ad_group.status = 'ENABLED'
+      `;
+      var adRows = AdsApp.search(adQuery);
+      while (adRows.hasNext()) {
+        var row = adRows.next();
+        adGroupsWithAds.add(row.adGroup.id);
+      }
 
-        // Iterate over active ad groups
-        while (adGroups.hasNext()) {
-          var adGroup = adGroups.next();
+      // --- 3. Alle actieve non-DSA ad groups (search only) ---
+      var keywordAdGroupQuery = `
+        SELECT campaign.id, ad_group.id, ad_group.name, campaign.name
+        FROM ad_group
+        WHERE ad_group.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND campaign.advertising_channel_type = 'SEARCH'
+          AND ad_group.type != 'SEARCH_DYNAMIC_ADS'
+      `;
+      var keywordAdGroupRows = AdsApp.search(keywordAdGroupQuery);
+      while (keywordAdGroupRows.hasNext()) {
+        var row = keywordAdGroupRows.next();
+        allKeywordAdGroups.set(row.adGroup.id, {
+          campaignName: row.campaign.name,
+          adGroupName: row.adGroup.name
+        });
+      }
 
-          // Get active ads in ad group
-          var ads = adGroup.ads().withCondition("Status = ENABLED").get();
+      // --- 4. Alle actieve keywords per ad group ---
+      var keywordQuery = `
+        SELECT ad_group.id
+        FROM ad_group_criterion
+        WHERE ad_group_criterion.type = 'KEYWORD'
+          AND ad_group_criterion.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND ad_group.status = 'ENABLED'
+          AND ad_group_criterion.negative = FALSE
+      `;
+      var keywordRows = AdsApp.search(keywordQuery);
+      while (keywordRows.hasNext()) {
+        var row = keywordRows.next();
+        adGroupsWithKeywords.add(row.adGroup.id);
+      }
 
-          // If no active ads found, add to array
-          if (!ads.hasNext()) {
-            var issues = true;
-            mailbodySheet.appendRow([accountName, "Active ad check", campaign.getName(), adGroup.getName(), " ", "No active ad was found in this ad group."]);
-          }
+      // --- 5. Controleer ad groups zonder actieve ads ---
+      for (var [adGroupId, info] of allAdGroups.entries()) {
+        if (!adGroupsWithAds.has(adGroupId)) {
+          issues = true;
+          rowsToAppend.push([
+            accountName,
+            "Active ad check",
+            info.campaignName,
+            info.adGroupName,
+            "",
+            "No active ad was found in this ad group."
+          ]);
         }
       }
 
-      // Get all active Search, non-DSA campaigns.
-      var activeCampaigns = AdsApp.campaigns()
-        .withCondition('Status = ENABLED')
-        .withCondition("campaign.name NOT REGEXP_MATCH '.*(" + dsaNaming + ").*'")
-        .withCondition('campaign.experiment_type = BASE')
-        .withCondition('campaign.end_date > "' + todayString + '"')
-        .withCondition("CampaignType = SEARCH")
-        .get();
-
-      // Iterate over active campaigns
-      while (activeCampaigns.hasNext()) {
-        var campaign = activeCampaigns.next();
-
-        // Get active ad groups
-        var activeAdGroups = campaign.adGroups()
-          .withCondition('Status = ENABLED')
-          .withCondition("ad_group.name NOT REGEXP_MATCH '.*(" + dsaNaming + ").*'")
-          .get();
-
-        // Iterate over active ad groups
-        while (activeAdGroups.hasNext()) {
-          var adGroup = activeAdGroups.next();
-
-          // Get all active keywords in the ad group
-          var activeKeywords = adGroup.keywords()
-            .withCondition('Status = ENABLED')
-            .get();
-
-          // Check if any active keyword is found.
-          if (activeKeywords.totalNumEntities() == 0) {
-            // If no active keyword is found, log the campaign and ad group name in the adGroupsWithIssues array
-            var issues = true;
-            mailbodySheet.appendRow([accountName, "Active keyword check", campaign.getName(), adGroup.getName(), " ", "No active keyword was found in this ad group."]);
-          }
+      // --- 6. Controleer ad groups zonder actieve keywords ---
+      for (var [adGroupId, info] of allKeywordAdGroups.entries()) {
+        if (!adGroupsWithKeywords.has(adGroupId)) {
+          issues = true;
+          rowsToAppend.push([
+            accountName,
+            "Active keyword check",
+            info.campaignName,
+            info.adGroupName,
+            "",
+            "No active keyword was found in this ad group."
+          ]);
         }
       }
-      if(issues){
+
+      // --- 7. Voeg in bulk issues toe aan de sheet ---
+      if (rowsToAppend.length > 0) {
+        mailbodySheet.getRange(mailbodySheet.getLastRow() + 1, 1, rowsToAppend.length, 6).setValues(rowsToAppend);
+      }
+
+      // --- 8. Log status als er issues zijn gevonden ---
+      if (issues) {
         logSheet.appendRow(["Active ad or keyword", accountId, todayString]);
       }
-
     }
   }
 
