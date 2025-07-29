@@ -1778,7 +1778,7 @@ function adHealthCheck(spreadsheetUrl) {
         WHERE ad_group.status = 'ENABLED'
           AND campaign.status = 'ENABLED'
           AND campaign.advertising_channel_type = 'SEARCH'
-          AND campaign.end_date > '` + todayString + `
+          AND campaign.end_date > '` + todayString + `'
           AND ad_group.type != 'SEARCH_DYNAMIC_ADS'
       `;
       var keywordAdGroupRows = AdsApp.search(keywordAdGroupQuery);
