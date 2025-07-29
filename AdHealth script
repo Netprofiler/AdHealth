@@ -210,7 +210,7 @@ function adHealthCheck(spreadsheetUrl) {
               disapprovedAdsCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'Link Checker':
-              linkChcker(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              linkChecker(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'New conversions found':
               newConvCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
@@ -535,7 +535,7 @@ function adHealthCheck(spreadsheetUrl) {
 //----------------------------- END CHANGE HISTORY CHECK -----------------------------
   
 //----------------------------- START LINK CHECKER ----------------------------- ----------------------------- ----------------------------- -----------------------------
-  function linkChcker(frequency, accountName, logSheet, mailbodySheet, accountId){   
+  function linkChecker(frequency, accountName, logSheet, mailbodySheet, accountId){
     var accountIdClean = accountId.replace(/-/g, '');
     var accountSelector = AdsManagerApp.accounts()
       .withCondition('customer_client.id = "' + accountIdClean + '"');
@@ -699,7 +699,7 @@ function adHealthCheck(spreadsheetUrl) {
       }
       
       
-      // check all urls in batches of 25. If error, check the one by one
+      // check all urls in batches of 200. If error, check the one by one
       var processBatch = [];
       var brokenUrls = [];
       
@@ -707,21 +707,32 @@ function adHealthCheck(spreadsheetUrl) {
         processBatch.push(deduplicatedUrls[i]);
         
         // Create a batch by slicing the array
-        if((i + 1) % 25 == 0 || i == (deduplicatedUrls.length - 1 )){
+        if((i + 1) % 200 == 0 || i == (deduplicatedUrls.length - 1 )){
           var timeOut = has45MinutesPassed();
           if(timeOut) break;
           try {
-            var responses = UrlFetchApp.fetchAll(processBatch);
-            Logger.log("Run batch 25")
+            //Logger.log("🟢 Running fetchAll batch of " + processBatch.length);
+            var responses = UrlFetchApp.fetchAll(processBatch.map(function(url) {
+              return { url: url, muteHttpExceptions: true };
+            }));
+
             for (var x = 0; x < responses.length; x++) {
               getStatusCodes(responses[x], processBatch[x]);
             }
-          } catch {
+          } catch (e) {
+            //Logger.log("🔴 Batch failed. Retrying individually...");
+            // Fall back naar individuele requests
             for (var x = 0; x < processBatch.length; x++) {
-              getResponseIndividually(processBatch[x]);
+              try {
+                var response = UrlFetchApp.fetch(processBatch[x], { muteHttpExceptions: true });
+                getStatusCodes(response, processBatch[x]);
+              } catch (e) {
+                //Logger.log("❌ Failed individually: " + processBatch[x]);
+                logBrokenLink(processBatch[x] + " (error: " + e.message + ")");
+              }
             }
           }
-          var processBatch = [];
+          processBatch = [];
         }
       }
       
@@ -1092,9 +1103,8 @@ function adHealthCheck(spreadsheetUrl) {
         
         // check if there are still issues
         var lastRow = linkCheckerLogSheet.getLastRow();
-        Logger.log("!!!Broken links check")
         if(lastRow > 1) {
-          Logger.log("!!!Broken links found")
+          //Logger.log("!!!Broken links found")
           
           // copy the issues
           var range = linkCheckerLogSheet.getRange('A1:G' + linkCheckerLogSheet.getLastRow());
@@ -1137,32 +1147,16 @@ function adHealthCheck(spreadsheetUrl) {
       addAccountName(accountName);
     }
     
-    function getStatusCodes (response, finalUrl){
+    function getStatusCodes(response, finalUrl) {
       var statusCode = response.getResponseCode();
-      //Logger.log("Bulk check: " + statusCode + " - " + finalUrl);
-      if(statusCode != 200){
-        logBrokenLink(finalUrl);
-        //Logger.log(statusCode + " - " + finalUrl)
+      if (statusCode != 200) {
+        logBrokenLink(finalUrl + " (status: " + statusCode + ")");
       } else {
         logWorkingLink(finalUrl);
-        //Logger.log(statusCode + " - " + finalUrl)
       }
     }
     
-    function getResponseIndividually(finalUrl) {
-      try{
-        var response = UrlFetchApp.fetch(finalUrl);
-        var statusCode = response.getResponseCode();
-        //Logger.log("Individual check: " + statusCode + " - " + finalUrl);
-        if(statusCode != 200){
-          logBrokenLink(finalUrl, statusCode);
-        } else {
-          logWorkingLink(finalUrl, statusCode);
-        }
-      } catch {
-        logBrokenLink(finalUrl, statusCode);
-      }
-    }
+
     
     // If a link is broken it's logged in a sheet. When the found to be broken during the second time then it will be added to the alert
     function logBrokenLink(finalUrl, statusCode) {
@@ -1781,6 +1775,7 @@ function adHealthCheck(spreadsheetUrl) {
         WHERE ad_group.status = 'ENABLED'
           AND campaign.status = 'ENABLED'
           AND campaign.advertising_channel_type = 'SEARCH'
+          AND campaign.end_date > '` + todayString + `
           AND ad_group.type != 'SEARCH_DYNAMIC_ADS'
       `;
       var keywordAdGroupRows = AdsApp.search(keywordAdGroupQuery);
