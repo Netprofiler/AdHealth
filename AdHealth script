@@ -1,10 +1,13 @@
 function adHealthCheck(spreadsheetUrl) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 1.15")
+  Logger.log("Good job, you're using the latest version: 1.16")
 
   /**
  * Changelog - Script Updates
  *
+ * Version v1.16 – 2025-07-29
+ * - Improve link checker to be more efficient. Check per 200 links. Fix issue with ended campaigns for active keyword check.
+ * 
  * Version v1.15 – 2025-07-29
  * - Improve active ad and keyword check. Making it faster by using Google Ads query. Remove some logging.
  * 
