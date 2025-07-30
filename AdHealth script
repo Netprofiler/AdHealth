@@ -5,6 +5,9 @@ function adHealthCheck(spreadsheetUrl) {
   /**
  * Changelog - Script Updates
  *
+ *  Version v1.16.1 – 2025-07-30
+ * - Run daily check first. Add end of run comment.
+ * 
  * Version v1.16 – 2025-07-29
  * - Improve link checker to be more efficient. Check per 200 links. Fix issue with ended campaigns for active keyword check.
  * 
@@ -116,18 +119,20 @@ function adHealthCheck(spreadsheetUrl) {
     }
 
     // Run checks
+    if(weekDay != "Saturday" && hour < 23) {
+      runChecks("Daily");
+      if(hour > 6){
+        sendEmail(mailadres);
+      }
+    }
+
     if(weekDay != "Saturday" && hour > 2 && hour < 23) {
       runChecks("Hourly");
       if(hour > 6){
         sendEmail(mailadres);
       }
     }
-    if(weekDay != "Saturday" && hour < 8) {
-      runChecks("Daily");
-      if(hour > 6){
-        sendEmail(mailadres);
-      }
-    }
+
     if(weekDay == "Saturday" && 4 < hour && hour < 23) {
       runChecks("Weekly");
       sendEmail(mailadres);
@@ -138,6 +143,8 @@ function adHealthCheck(spreadsheetUrl) {
       sendBudget();
       sendEmail(mailadres);
     }
+
+    Logger.log("All checks were finished for this round.")
 
   } else if (mailadres.length == 0 || accountLabel.length == 0){
     Logger.log("Mailaddress and/or account label not provided");
