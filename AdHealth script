@@ -5,6 +5,9 @@ function adHealthCheck(spreadsheetUrl) {
   /**
  * Changelog - Script Updates
  *
+ *  Version v1.16.2 – 2025-09-23
+ * - Support multiple email addresses separated by comma
+ * 
  *  Version v1.16.1 – 2025-07-30
  * - Run daily check first. Add end of run comment.
  * 
@@ -81,7 +84,8 @@ function adHealthCheck(spreadsheetUrl) {
   var hour = getHour();
   var firstDayOfTheMonth = isTodayFirstDayOfMonth();
   var accountLabel = settingsSheet.getRange('B3').getValue();
-  var mailadres = settingsSheet.getRange('B4').getValue();
+  var mailadresRaw = settingsSheet.getRange('B4').getValue();
+  var mailadres = mailadresRaw.split(",");
   var startTime = new Date();
   var dsaNaming = settingsSheet.getRange('J3').getValue();
   var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
