@@ -1,0 +1,2639 @@
+function adHealthCheck(spreadsheetUrl) {
+  //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
+  Logger.log("Good job, you're using the latest version: 1.16.2")
+
+  /**
+ * Changelog - Script Updates
+ *
+ *  Version v1.16.2 – 2025-09-23
+ * - Support multiple email addresses separated by comma
+ * 
+ *  Version v1.16.1 – 2025-07-30
+ * - Run daily check first. Add end of run comment.
+ * 
+ * Version v1.16 – 2025-07-29
+ * - Improve link checker to be more efficient. Check per 200 links. Fix issue with ended campaigns for active keyword check.
+ * 
+ * Version v1.15 – 2025-07-29
+ * - Improve active ad and keyword check. Making it faster by using Google Ads query. Remove some logging.
+ * 
+ * Version v1.14 – 2025-07-24
+ * - Exclude ended campaigns for tROAS check.
+ * 
+ * Version v1.13 – 2025-07-23
+ * - Send issues left from last run, which may not been send if the script timed-out.
+ * 
+ * Version v1.12 – 2025-06-24
+ * - Fixed issues related to clearing the montly log sheet.
+ *  
+ * Version v1.11 – 2025-03-10
+ * - Fixed issues related to disapproved products in the script.
+ * 
+ * Version v1.10 – 2025-01-29
+ * - Added UTM tagging and active keyword/ad check to the AdHealth script.
+ * - Implemented fixes for the link checker.
+ * 
+ * Version v1.9 – 2024-12-09
+ * - Added check for disapproved Pmax asset groups in disapproved ads.
+ * 
+ * Version v1.8 – 2024-11-28
+ * - Fixed bugs in AdHealth script.
+ * 
+ * Version v1.7 – 2024-11-25
+ * - Added Lin Rodnitzky Ratio to the AdHealth script.
+ * 
+ * Version v1.6 – 2024-11-01
+ * - Updated UTM script for Performance Max (Pmax) campaigns.
+ * 
+ * Version v1.5 – 2024-08-19
+ * - Enabled users to whitelist their own email addresses for the unknown user check.
+ * 
+ * Version v1.4 – 2024-08-02
+ * - Fixed bugs in the link checker.
+ * 
+ * Version v1.3 – 2024-07-09
+ * - Bug fixes related to the clear daily log functionality.
+ * 
+ * Version v1.2 – 2024-05-30
+ * - Addressed issues with the conversion recency script; applied upper limit only for budget logic.
+ * 
+ * Version v1.1 – 2024-05-02
+ * - Updated budget scripting logic.
+ * 
+ * Version v1.0.1 – 2024-04-11
+ * - Added tracking for days since last conversion.
+ * - General bug fixes.
+ * 
+ * Version v1.0 – 2024-01-17
+ * - Initial version of the script.
+ */
+
+  
+  var spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
+  var shortUrl = spreadsheetUrl;
+
+  var newSetup = false;
+  var newSetup = setup();
+     
+  // Get variables
+  var settingsSheet = spreadsheet.getSheetByName('Settings');
+  var mailbodySheet = spreadsheet.getSheetByName("MailBody");
+  var timezone = "Europe/Amsterdam";
+  var todayString = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
+  var weekDay = getDayOfWeek();
+  var hour = getHour();
+  var firstDayOfTheMonth = isTodayFirstDayOfMonth();
+  var accountLabel = settingsSheet.getRange('B3').getValue();
+  var mailadresRaw = settingsSheet.getRange('B4').getValue();
+  var mailadres = mailadresRaw.split(",");
+  var startTime = new Date();
+  var dsaNaming = settingsSheet.getRange('J3').getValue();
+  var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
+  
+  if(weekDay == "Monday" && hour == 23){
+    logAccounts(today);
+  }
+
+  if(!shortUrl) {
+    var shortUrl = spreadsheetUrl;
+  }
+  Logger.log(shortUrl)
+  
+  if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
+    checkAccount();
+    
+    // Clear the logs
+    if(weekDay != "Saturday" && hour == 0){
+      clearLogs("Hourly");
+      clearLogs("Daily");
+      clearLinkLogs();
+      clearPacing();
+      
+    }
+    if(weekDay == "SaturDay" && hour == 0){
+      clearLog("Weekly");
+    }
+    if(firstDayOfTheMonth && hour == 0){
+      clearLog("Monthly");
+    }
+
+    // Send email with foundings of last run in case it timed out
+    if(hour > 6){
+      sendEmail(mailadres);
+    }
+
+    // Run checks
+    if(weekDay != "Saturday" && hour < 23) {
+      runChecks("Daily");
+      if(hour > 6){
+        sendEmail(mailadres);
+      }
+    }
+
+    if(weekDay != "Saturday" && hour > 2 && hour < 23) {
+      runChecks("Hourly");
+      if(hour > 6){
+        sendEmail(mailadres);
+      }
+    }
+
+    if(weekDay == "Saturday" && 4 < hour && hour < 23) {
+      runChecks("Weekly");
+      sendEmail(mailadres);
+    }
+    if(firstDayOfTheMonth && hour == 6) {
+      clearLogs("Monthly");
+      runChecks("Monthly");
+      sendBudget();
+      sendEmail(mailadres);
+    }
+
+    Logger.log("All checks were finished for this round.")
+
+  } else if (mailadres.length == 0 || accountLabel.length == 0){
+    Logger.log("Mailaddress and/or account label not provided");
+  }
+  
+//----------------------------- START ALL CHECKS -----------------------------
+// Hourly check have the highest priority. They will be done first. 
+  
+  function runChecks(checkFrequency) {
+    Logger.log(checkFrequency)
+    var settingsSheet = spreadsheet.getSheetByName('Settings');
+
+    // Get all account IDs from column A starting at row 7.
+    var accountIds = settingsSheet.getRange('A7:A').getValues().flat().filter(Boolean);
+
+    // Get all account names from column B starting at row 7.
+    var accountNames = settingsSheet.getRange('B7:B').getValues().flat().filter(Boolean);
+    
+    // Get all check names from row 6.
+    var checkNames = settingsSheet.getRange('C6:X6').getValues()[0];
+
+    // Add Merchant Center ID check and Disapproved products to the checkNames
+    checkNames.push('Merchant Center ID check');
+    checkNames.push('Disapproved products');
+    
+    // Get all check frequencies for each account.
+    var checkFrequencies = settingsSheet.getRange('C7:X').getValues();
+
+    // Iterate over each account and do checks.
+    for (var i = 0; i < accountIds.length; i++) {
+      var accountId = accountIds[i];
+      var accountname = accountNames[i];
+      Logger.log(checkFrequency + " -- " + accountname)
+      for (var j = 0; j < checkNames.length; j++) {
+        var timeOut = has45MinutesPassed();
+        var checkName = checkNames[j];
+        var frequency = checkFrequencies[i][j];
+        
+        // Set frequency of hidden checks
+        switch (checkName) {
+            case 'Disapproved products':
+              var frequency = "Daily";
+              break;
+            case 'UTM tagging':
+              var frequency = "Daily";
+              break;
+            case 'Merchant Center ID check':
+              var frequency = "Daily";
+              break;
+        }
+
+        var logSheet = spreadsheet.getSheetByName(frequency + 'Log');
+        
+        // Check if the script for this account ID has already run in the period. -----------------------------------------------------------------
+        if (frequency === checkFrequency) {
+          var logData = logSheet.getDataRange();
+          var logData = logData.getValues();
+          var alreadyRun = logData.some(row => row[0] === checkName && row[1] === accountId);
+        }
+
+        if (!alreadyRun && frequency == checkFrequency && !timeOut) {
+          Logger.log(checkFrequency + " -- " + accountname + " -- " + checkName)
+          switch (checkName) {
+            case 'Account down':
+              if(hour > 5){
+                accountDown(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+                break;
+              }
+            case 'Unknown user made a change':
+              changeHistoryCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'Disapproved Ads':
+              disapprovedAdsCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'Link Checker':
+              linkChecker(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'New conversions found':
+              newConvCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'UTM tagging':
+              var applyTagging = checkFrequencies[i][j];
+              if(applyTagging){
+                utmTagging(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              }
+              break;
+            case 'Target ROAS check':
+              var positionMinTROAS = checkNames.indexOf('Minimum target ROAS amount') + 3;
+              var minTRoas = settingsSheet.getRange(i + 7, positionMinTROAS).getValue();
+              tROASCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, minTRoas);
+              break;
+            case 'Active ad or keyword':
+              activeAdOrKeyword(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'Search term CPC check':
+              var positionMaxSearchTermCpc = checkNames.indexOf('Search term CPC amount') + 3;
+              var maxSearchTermCpc = settingsSheet.getRange(i + 7, positionMaxSearchTermCpc).getValue();
+              maxSearchTermCpcCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, maxSearchTermCpc);
+              break;
+            case 'Disapproved products':
+              var merchantCenterIdPosition = checkNames.indexOf('Merchant Center ID') + 3;
+              var merchantCenterId = settingsSheet.getRange(i + 7, merchantCenterIdPosition).getValue();
+              var productThresholdPosition = checkNames.indexOf('Acceptable % of disapproved products') + 3;
+              var productThreshold = settingsSheet.getRange(i + 7, productThresholdPosition).getValue();
+              if(merchantCenterId && productThreshold) {
+                try {
+                  disapprovedProducts(frequency, accountNames[i], logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold);
+                }
+                catch(err) {
+                  Logger.log(err.message);
+                }
+              }
+              break;
+            case 'Budget monitoring':
+              var budgetPosition = checkNames.indexOf('Monthly budget') + 3;
+              var accountBudget = settingsSheet.getRange(i + 7, budgetPosition).getValue();
+              var campaignTypePosition = checkNames.indexOf('Only Shopping/ Pmax/Search') + 3;
+              var campaignType = settingsSheet.getRange(i + 7, campaignTypePosition).getValue();
+              var limitTypePosition = checkNames.indexOf('Upper limit only') + 3;
+              var limitType = settingsSheet.getRange(i + 7, limitTypePosition).getValue();
+              budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, i, limitType);
+              break;
+            case 'Conversion recency check':
+              var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + 3;
+              var daysToCheck = settingsSheet.getRange(i + 7, daysToCheckPosition).getValue();
+              daysSinceLastConversion(frequency, accountNames[i], logSheet, mailbodySheet, accountId, daysToCheck);
+              break; 
+            case 'Lin Rodnitzky Ratio':
+              linRodnitzkyRatio(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              break;
+            case 'Merchant Center ID check':
+              var positionMerchantCenterId = checkNames.indexOf('Merchant Center ID') + 3;
+              var MerchantCenterId = settingsSheet.getRange(i + 7, positionMerchantCenterId).getValue();
+              if(!MerchantCenterId){
+                merchantCenterIdCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, i + 7, positionMerchantCenterId);
+              }
+              break;
+          }
+        } else if (alreadyRun){
+          //Logger.log(checkName + " already run")
+        }
+      }
+    }
+  }
+  
+
+//----------------------------- END ALL CHECKS -----------------------------  
+  
+
+  
+//********************************************************************************************************************************************************************************
+//********************************************************************************************************************************************************************************
+//----------------------------- START CHECK SPECIFIC SCRIPTS -----------------------------  
+  
+//----------------------------- START ACCOUNT DOWN SCRIPTS -----------------------------
+  function accountDown (frequency, accountName, logSheet, mailbodySheet, accountId) {
+    var accountIdClean = accountId.replace(/-/g, '');
+
+    var mccAccount = AdsApp.currentAccount();
+    var accountSelector = MccApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    // get the iterator to iterate over all selected accounts
+    var accountIterator = accountSelector.get();
+
+    // Iterate through the list of accounts
+    while (accountIterator.hasNext()) {
+
+      var account = accountIterator.next();
+      var accountName = account.getName();
+      //Logger.log("Account down check for " + accountName);
+
+      // Select the client account.
+      MccApp.select(account);
+      var NUM_HOURS_TO_CHECK = 3;
+
+      // check and log
+      if(frequency == "Hourly") {
+        var result = runPerAccount(NUM_HOURS_TO_CHECK, frequency, accountName, logSheet, mailbodySheet, accountId);
+        return result;
+      } else {
+        checkActivityYesterday(frequency, accountName, logSheet, mailbodySheet, accountId);
+      }
+    }
+    addAccountName(accountName);
+
+    // Switch back to MCC account
+    MccApp.select(mccAccount);
+  }
+  
+  function checkActivityYesterday(frequency, accountName, logSheet, mailbodySheet, accountId) {
+    Logger.log(frequency + " -- " + accountName + " -- Account down -- " + frequency + " check");
+    var report = AdsApp.report(
+        "SELECT campaign.name " +
+        "FROM campaign " +
+        "WHERE metrics.impressions > 0 " +
+        "AND segments.date DURING YESTERDAY " +
+        "LIMIT 1"
+    );
+    
+    var rows = report.rows();
+    if (rows.hasNext()) {
+      Logger.log(frequency + " -- " + accountName + " -- Account down -- The Account seems to be active yesterday.");
+    } else {
+      Logger.log(frequency + " -- " + accountName + " -- The Account seems to be inactive yesterday.");
+      logSheet.appendRow(["Account down", accountId, todayString]);
+      mailbodySheet.appendRow([accountName, "Account down", " ", " ", " ", "The Account seems to be inactive yesterday."]);
+    }
+  }
+
+  function runPerAccount(NUM_HOURS_TO_CHECK, frequency, accountName, logSheet, mailbodySheet, accountId) {
+    var timeZone = AdsApp.currentAccount().getTimeZone();
+    var METRIC_TO_CHECK = "Impressions";
+    var DEBUG = 1;
+
+    function getDateRangeYesterdayToToday() {
+      var currentDate = new Date();
+
+      var tempDate = new Date(); 
+      tempDate.setDate(tempDate.getDate()-1);
+
+      var yesterdayDate = tempDate;
+      return Utilities.formatDate(yesterdayDate, timeZone,'yyyyMMdd' ) + "," + Utilities.formatDate(currentDate, timeZone,'yyyyMMdd' );
+    }
+
+    var dateRange =  getDateRangeYesterdayToToday();
+    var currentDate = new Date();
+
+    var queryText = "SELECT " + METRIC_TO_CHECK + ", DayOfWeek, HourOfDay FROM ACCOUNT_PERFORMANCE_REPORT DURING " + dateRange;
+    var result = AdWordsApp.report(queryText);
+    var rows = result.rows();
+
+    var daysMapping = [];
+    daysMapping["Sunday"] = 7;
+    daysMapping["Monday"] = 1;
+    daysMapping["Tuesday"] = 2;
+    daysMapping["Wednesday"] = 3;
+    daysMapping["Thursday"] = 4;
+    daysMapping["Friday"] = 5;
+    daysMapping["Saturday"] = 6;
+
+    var impressionsByHour = {};
+
+    while(rows.hasNext()) {
+      var currentRow = rows.next();
+      var dayFactor = daysMapping[currentRow["DayOfWeek"]];
+      var hourFactor = parseFloat(currentRow["HourOfDay"]);
+      var actualHour = dayFactor * 24 + hourFactor;
+      //if(DEBUG) Logger.log(dayFactor +","+ hourFactor + " => " + currentRow["Impressions"]);
+      impressionsByHour[actualHour] = currentRow["Impressions"];                            
+    }
+
+    // check if an entry exists for any of the last 3 hours
+    var foundEntry = false;
+    var numHoursToCheck = NUM_HOURS_TO_CHECK + 1;
+    for(var i=1;i<numHoursToCheck;i++){
+      var tempDate = new Date();
+      tempDate.setHours(tempDate.getHours() - i);
+      var tempHour = parseFloat(Utilities.formatDate(tempDate, timeZone, "HH"));
+      var tempDay = parseFloat(Utilities.formatDate(tempDate, timeZone, "u"));
+      var hourIndexToCheck = tempDay * 24 + tempHour;
+      if(impressionsByHour[hourIndexToCheck] != undefined && impressionsByHour[hourIndexToCheck] != 0){
+        foundEntry = true;
+        break;      
+      }
+    }
+
+    if(foundEntry){
+      Logger.log(frequency + " -- " + accountName + " -- Account down -- The Account seems to be active in the last " + NUM_HOURS_TO_CHECK + " hours.");
+    } else {
+      Logger.log(frequency + " -- " + accountName + " -- The Account seems to be inactive in the last " + NUM_HOURS_TO_CHECK + " hours.");
+      logSheet.appendRow(["Account down", accountId, todayString]);
+      mailbodySheet.appendRow([accountName, "Account down", " ", " ", " ", "The Account seems to be inactive in the last " + NUM_HOURS_TO_CHECK + " hours."]);
+    }
+  }
+  
+//----------------------------- END ACCOUNT DOWN SCRIPTS -----------------------------
+  
+//----------------------------- START DISAPPROVED ADS CHECK -----------------------------  
+  function disapprovedAdsCheck(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    // Check responsive search ads
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      var accountName = AdsApp.currentAccount().getName();
+      var whereClause = "WHERE ad_group_ad.policy_summary.approval_status = 'DISAPPROVED' AND campaign.status = 'ENABLED' AND campaign.serving_status != 'ENDED' AND ad_group.status = 'ENABLED' AND ad_group_ad.status = 'ENABLED' AND segments.date DURING TODAY";
+   
+      var gaqlQuery = "SELECT campaign.name, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.policy_topic_entries FROM ad_group_ad "+whereClause;
+
+      var results = AdsApp.search(gaqlQuery);
+      while (results.hasNext()) {
+        var row=results.next();
+        
+        var campaignName = row.campaign.name;
+        var adGroupName = row.adGroup.name;
+        var adId = row.adGroupAd.ad.id;
+        var adType = row.adGroupAd.ad.type;
+        var approvalStatus = row.adGroupAd.policySummary.approvalStatus;
+        var policyTopicEntries = row.adGroupAd.policySummary.policyTopicEntries;
+
+        var policyFindings = "";
+
+        if (policyTopicEntries.length > 0) {
+          for (var i=0; i < policyTopicEntries.length; i++) {
+            var policyTopic = policyTopicEntries[i].topic;
+            if (policyFindings == "") {
+              policyFindings = policyTopic;
+            } else {
+              policyFindings = policyFindings.concat(" , "+policyTopic);
+            }
+          }      
+        }
+        Logger.log(frequency + " -- " + accountName + " -- Disapproved Ads -- Disapproved Ads found!");
+        logSheet.appendRow(["Disapproved Ads", accountId, todayString]);
+        mailbodySheet.appendRow([accountName, "Disapproved Ads", campaignName, adGroupName, " ", approvalStatus + ": " + policyFindings]);
+      }
+   
+      var gaqlQuery = "SELECT asset_group.primary_status_reasons, campaign.name, asset_group.name FROM asset_group WHERE asset_group.primary_status_reasons CONTAINS ANY ('ASSET_GROUP_DISAPPROVED') AND campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED' AND asset_group.primary_status_reasons CONTAINS NONE ('CAMPAIGN_ENDED', 'CAMPAIGN_REMOVED')";
+
+      var results = AdsApp.search(gaqlQuery);
+      while (results.hasNext()) {
+        var row=results.next();
+        
+        var campaignName = row.campaign.name;
+        var adGroupName = row.assetGroup.name;
+        var approvalStatus = row.assetGroup.primaryStatusReasons;
+        Logger.log(approvalStatus)
+        Logger.log(approvalStatus[0])
+
+        Logger.log(frequency + " -- " + accountName + " -- Disapproved Asset Group -- Disapproved Asset Groups found!");
+        logSheet.appendRow(["Disapproved Asset Group", accountId, todayString]);
+        mailbodySheet.appendRow([accountName, "Disapproved Asset Group", campaignName, adGroupName, " ", approvalStatus[0]]);
+      }
+      addAccountName(accountName);
+    }
+  }
+
+//----------------------------- END DISAPPROVED ADS CHECK -----------------------------  
+  
+//----------------------------- START CHANGE HISTORY CHECK -----------------------------
+  function changeHistoryCheck(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var accountIdClean = accountId.replace(/-/g, '');
+
+    var userRex = emailWhitelist.replace(/\s*,\s*/g, '|');
+    var userRex = userRex + "|Bulk Actions";
+    
+    var mccAccount = AdsApp.currentAccount();
+    var accountSelector = MccApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"')
+
+    // get the iterator to iterate over all selected accounts
+    var accountIterator = accountSelector.get();
+
+    // Iterate through the list of accounts
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      var accountName = account.getName();
+      //Logger.log("History check for " + accountName);
+      
+      // get period
+      if(frequency = "Hourly") {
+        var period = "TODAY";
+      } else if (frequency = "Daily") {
+        var period = "YESTERDAY";
+      } else if (frequency = "Weekly") {
+        var period = "LAST_7_DAYS";
+      } else {
+        var period = "LAST_30_DAYS"
+      }
+      
+      // get changes of period
+      var report = AdsApp.report(
+        "SELECT change_event.resource_name, change_event.user_email " +
+        "FROM change_event " +
+        "WHERE change_event.change_date_time DURING " + period + " " +
+        "AND change_event.user_email NOT REGEXP_MATCH '.*(" + userRex + ").*' " +
+        "ORDER BY change_event.change_date_time DESC " +
+        "LIMIT 1");
+
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var changeUser = row['change_event.user_email'];
+        Logger.log(frequency + " -- " + accountName + " -- Unknown user made a change -- Other user!: " + changeUser);
+        logSheet.appendRow(["Unknown user made a change", accountId, todayString]);
+        mailbodySheet.appendRow([accountName, "Change history", " ", " ", " ", "An unknown user has made changes to the account: " + changeUser]);
+      }
+      addAccountName(accountName)
+    }
+  }
+  
+//----------------------------- END CHANGE HISTORY CHECK -----------------------------
+  
+//----------------------------- START LINK CHECKER ----------------------------- ----------------------------- ----------------------------- -----------------------------
+  function linkChecker(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    // Open the Link Checker Log sheet by its name
+    var linkCheckerLogSheet = spreadsheet.getSheetByName('LinkCheckerLog');
+    var checkedLinksSheet = spreadsheet.getSheetByName('checkedLinks') || spreadsheet.insertSheet('checkedLinks');
+    var brokenLinksSheet = spreadsheet.getSheetByName('brokenLinks') || spreadsheet.insertSheet('brokenLinks');
+    
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var timeOut = has45MinutesPassed();
+      
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      var accountName = AdsApp.currentAccount().getName();
+      //Logger.log(accountName);
+    
+      
+      // Export all ad final URLs to a sheet
+      var query = AdsApp.report(
+        `
+        SELECT 
+          ad_group_ad.ad.final_urls 
+        FROM ad_group_ad 
+        WHERE 
+         ad_group_ad.status = 'ENABLED' 
+         AND ad_group.status = 'ENABLED' 
+         AND campaign.status = 'ENABLED'
+         AND campaign.end_date > '` + todayString + `' 
+         AND campaign.experiment_type != 'EXPERIMENT' 
+        `
+      );
+
+      query.exportToSheet(linkCheckerLogSheet);
+    
+      // Get check URLs and set in a string
+      if(linkCheckerLogSheet.getLastRow() > 1) {
+        var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
+        var adValues = range.getValues();
+      }
+      
+      // Export all asset group final URLs to a sheet
+      var query = AdsApp.report(
+        `
+        SELECT 
+          asset_group.final_urls
+        FROM asset_group
+        WHERE 
+         asset_group.status = 'ENABLED' 
+         AND campaign.status = 'ENABLED'
+         AND campaign.end_date > '` + todayString + `' 
+         AND campaign.experiment_type != 'EXPERIMENT' 
+        `
+      );
+
+      query.exportToSheet(linkCheckerLogSheet);
+    
+      // Get check URLs and set in a string
+      if(linkCheckerLogSheet.getLastRow() > 1) {
+        var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
+        var assetGroupValues = range.getValues();
+      }
+      
+      // Export all account sitelink final URLs to a sheet
+      var query = AdsApp.report(
+        `
+        SELECT 
+          asset.final_urls, 
+          campaign.name, 
+          ad_group.name 
+        FROM customer_asset 
+        WHERE
+          customer_asset.status = 'ENABLED'
+        `
+      );
+
+      query.exportToSheet(linkCheckerLogSheet);
+    
+      // Get check URLs and set in a string
+      if(linkCheckerLogSheet.getLastRow() > 1) {
+        var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
+        var accountAssetValues = range.getValues();
+      }
+      
+      // Export all campaign asset final URLs to a sheet
+      var query = AdsApp.report(
+        `
+        SELECT 
+          asset.final_urls, 
+          campaign.status, 
+          campaign.experiment_type, 
+          campaign.end_date 
+        FROM campaign_asset 
+        WHERE 
+          campaign_asset.status = 'ENABLED' 
+          AND campaign.status = 'ENABLED' 
+          AND campaign.end_date > '` + todayString + `' 
+          AND campaign.experiment_type != 'EXPERIMENT'  
+        `
+      );
+
+      query.exportToSheet(linkCheckerLogSheet);
+    
+      // Get check URLs and set in a string
+      if(linkCheckerLogSheet.getLastRow() > 1) {
+        var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
+        var campaignAssetValues = range.getValues();
+      }
+
+      // Export all ad group sitelink asset URLs to a sheet
+      var query = AdsApp.report(
+        `
+        SELECT 
+          asset.final_urls, 
+          campaign.status, 
+          ad_group.status, 
+          campaign.experiment_type, 
+          campaign.end_date 
+        FROM ad_group_asset 
+        WHERE 
+          campaign.status = 'ENABLED' 
+          AND ad_group.status = 'ENABLED' 
+          AND ad_group_asset.status = 'ENABLED' 
+          AND campaign.end_date > '` + todayString + `'
+          AND campaign.experiment_type != 'EXPERIMENT'   
+        `
+      );
+
+      query.exportToSheet(linkCheckerLogSheet);
+    
+      // Get check URLs and set in a string
+      //Logger.log(linkCheckerLogSheet.getLastRow())
+      if(linkCheckerLogSheet.getLastRow() > 1) {
+        var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow()-1, 1); // Start from row 2 to skip header, column 2 for URLs
+        var adgroupAssetValues = range.getValues();
+      }
+      
+      var urlValues = [];
+      var urlValues = urlValues.concat(adValues, assetGroupValues, accountAssetValues, campaignAssetValues, adgroupAssetValues).flat();
+      //Logger.log(urlValues)
+            
+      // Remove empty values and deduplicate
+      var deduplicatedUrls = Array.from(new Set(urlValues.filter(function(value) {
+          // Check for non-empty, non-null, and non-undefined values
+          return value && value.trim() !== '';
+      })));
+
+      //Logger.log(deduplicatedUrls.length + ": " + deduplicatedUrls)
+      
+      // Get all the urls of this accountname and remove them from the deduplcated list. These URL's won't be checked again on the same day
+      var lastRow = checkedLinksSheet.getLastRow();
+      if (lastRow > 1) {
+        var range = checkedLinksSheet.getRange(1, 1, lastRow - 1, 1);
+        var checkedUrls = range.getValues().flat(); // Get all URLs from the sheet and flatten the array
+
+        // Filter out any URLs found in the checkedUrls array
+        deduplicatedUrls = deduplicatedUrls.filter(function(url) {
+          return checkedUrls.indexOf(url) === -1;
+        });
+      }
+      
+      
+      // check all urls in batches of 200. If error, check the one by one
+      var processBatch = [];
+      var brokenUrls = [];
+      
+      for (let i = 0; i < deduplicatedUrls.length; i++) {
+        processBatch.push(deduplicatedUrls[i]);
+        
+        // Create a batch by slicing the array
+        if((i + 1) % 200 == 0 || i == (deduplicatedUrls.length - 1 )){
+          var timeOut = has45MinutesPassed();
+          if(timeOut) break;
+          try {
+            //Logger.log("🟢 Running fetchAll batch of " + processBatch.length);
+            var responses = UrlFetchApp.fetchAll(processBatch.map(function(url) {
+              return { url: url, muteHttpExceptions: true };
+            }));
+
+            for (var x = 0; x < responses.length; x++) {
+              getStatusCodes(responses[x], processBatch[x]);
+            }
+          } catch (e) {
+            //Logger.log("🔴 Batch failed. Retrying individually...");
+            // Fall back naar individuele requests
+            for (var x = 0; x < processBatch.length; x++) {
+              try {
+                var response = UrlFetchApp.fetch(processBatch[x], { muteHttpExceptions: true });
+                getStatusCodes(response, processBatch[x]);
+              } catch (e) {
+                //Logger.log("❌ Failed individually: " + processBatch[x]);
+                logBrokenLink(processBatch[x] + " (error: " + e.message + ")");
+              }
+            }
+          }
+          processBatch = [];
+        }
+      }
+      
+      // Get all urls that have been flagged as broken twive for this accountName
+      var data = brokenLinksSheet.getDataRange().getValues(); // Get all data from the sheet
+
+      // Start at row 2 (index 1), assuming row 1 is headers
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        var url = row[0]; // URL is in column A
+        var account = row[3]; // Account Name is in column B
+        var status = row[2]; // Status is in column C
+
+        // Check if status is "Broken link" and account name matches
+        if (status === "Broken link" && account === accountName) {
+          brokenUrls.push(url); // Add the URL to the brokenUrls array
+        }
+      }
+      
+      // All broken links are collected at this point. These are broken links from ads and assets.
+      if(brokenUrls.length > 0){
+        //Logger.log("Broken links found: " + brokenUrls.length + " : " + brokenUrls)
+        var brokenUrlsString = brokenUrls.join("','");
+        
+        // Export all ads with broken url to a sheet
+        var adData = "";
+        
+        var query = AdsApp.report(
+          `
+          SELECT 
+            ad_group_ad.ad.final_urls,
+            campaign.name,
+            ad_group.name
+          FROM ad_group_ad 
+          WHERE 
+            ad_group_ad.ad.final_urls CONTAINS ANY ('` + brokenUrlsString + `')
+            AND ad_group_ad.status = 'ENABLED' 
+            AND ad_group.status = 'ENABLED' 
+            AND campaign.status = 'ENABLED'
+            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.experiment_type != 'EXPERIMENT' 
+          `
+        );
+
+        query.exportToSheet(linkCheckerLogSheet);
+        
+        // Check and remove empty URLs in Column A
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          for (var row = lastRow; row >= 2; row--) {
+            var url = linkCheckerLogSheet.getRange(row, 1).getValue();
+            if (!url || url.trim() === '') {
+              linkCheckerLogSheet.deleteRow(row);
+            }
+          }
+
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow() - 1, 3);
+          var values = range.getValues();
+
+
+          // Prepare ad data to be written
+          var adData = values.map(row => {
+            var error = 'Broken link found in ad: ' + row[0]; // Prepend text to URL
+            return ["Link checker", frequency, todayString, row[1], row[2], null, error]; // Arrange data in the new order
+          });
+        }
+        
+        // Export all asset groups with broken url to a sheet
+        var assetGroupData = "";
+        
+        var query = AdsApp.report(
+          `
+          SELECT 
+            asset_group.final_urls,
+            campaign.name,
+            asset_group.name
+          FROM asset_group 
+          WHERE 
+            asset_group.final_urls CONTAINS ANY ('` + brokenUrlsString + `')
+            AND asset_group.status = 'ENABLED' 
+            AND campaign.status = 'ENABLED'
+            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.experiment_type != 'EXPERIMENT' 
+          `
+        );
+
+        query.exportToSheet(linkCheckerLogSheet);
+        
+        // Check and remove empty URLs in Column A
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          for (var row = lastRow; row >= 2; row--) {
+            var url = linkCheckerLogSheet.getRange(row, 1).getValue();
+            if (!url || url.trim() === '') {
+              linkCheckerLogSheet.deleteRow(row);
+            }
+          }
+
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow() - 1, 3);
+          var values = range.getValues();
+
+
+          // Prepare ad data to be written
+          var assetGroupData = values.map(row => {
+            var error = 'Broken link found in ad: ' + row[0]; // Prepend text to URL
+            return ["Link checker", frequency, todayString, row[1], row[2], null, error]; // Arrange data in the new order
+          });
+        }
+        
+        // Export all account assets with broken url to a sheet
+        var accountAssetData = "";
+        
+        var query = AdsApp.report(
+          `
+          SELECT 
+            asset.final_urls, 
+            customer_asset.field_type, 
+            asset.callout_asset.end_date, 
+            asset.mobile_app_asset.end_date, 
+            asset.promotion_asset.end_date, 
+            asset.sitelink_asset.end_date,
+            asset.promotion_asset.redemption_end_date  
+          FROM customer_asset 
+          WHERE 
+            asset.final_urls CONTAINS ANY ('` + brokenUrlsString + `') 
+            AND customer_asset.status = 'ENABLED' 
+          `
+        );
+
+        query.exportToSheet(linkCheckerLogSheet);
+        
+        // Check and remove empty URLs in Column A
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          for (var row = lastRow; row >= 2; row--) {
+            var url = linkCheckerLogSheet.getRange(row, 1).getValue();
+            if (!url || url.trim() === '') {
+              linkCheckerLogSheet.deleteRow(row);
+            }
+          }
+
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getDataRange();
+          var values = range.getValues();
+          
+          var currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0);
+
+          // Start from the bottom to avoid indexing issues after deleting a row
+          for (var i = values.length - 1; i >= 1; i--) {
+            var row = values[i];
+            var deleteRow = false;
+
+            // Check columns C, D, E, F, G for dates
+            for (var j = 2; j <= 6; j++) { // Column indexes: C=2, D=3, E=4, F=5, G=6
+              if (row[j] instanceof Date && row[j] < currentDate) {
+                deleteRow = true;
+                break; // No need to check further columns if one is already in the past
+              }
+            }
+
+            if (deleteRow) {
+              linkCheckerLogSheet.deleteRow(i + 1); // +1 because array is 0-indexed but sheets are 1-indexed
+            }
+            
+          }
+        }
+        
+        // check if there are still issues
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow() - 1, 4);
+          var values = range.getValues();
+
+          // Prepare account asset data to be written
+          var accountAssetData = values.map(row => {
+            var error = 'Broken link found in ' + row[1] + ' on account level. Url: ' + row[0]; // Prepend text to URL
+            return ["Link checker", frequency, todayString, null, null, null, error]; // Arrange data in the new order
+          });
+        }
+        
+        // Export all campaign assets with broken url to a sheet
+        var campaignAssetData = "";
+        
+        var query = AdsApp.report(
+          `
+          SELECT 
+            asset.final_urls, 
+            campaign_asset.field_type, 
+            campaign.name,
+            campaign.status, 
+            campaign.experiment_type, 
+            campaign.end_date, 
+            asset.callout_asset.end_date, 
+            asset.mobile_app_asset.end_date, 
+            asset.promotion_asset.end_date, 
+            asset.sitelink_asset.end_date,
+            asset.promotion_asset.redemption_end_date 
+          FROM campaign_asset 
+          WHERE 
+            asset.final_urls CONTAINS ANY ('` + brokenUrlsString + `') 
+            AND campaign_asset.status = 'ENABLED' 
+            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.experiment_type != 'EXPERIMENT' 
+            AND campaign.status = 'ENABLED'
+          `
+        );
+
+        query.exportToSheet(linkCheckerLogSheet);
+        
+        // Check and remove empty URLs in Column A
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          for (var row = lastRow; row >= 2; row--) {
+            var url = linkCheckerLogSheet.getRange(row, 1).getValue();
+            if (!url || url.trim() === '') {
+              linkCheckerLogSheet.deleteRow(row);
+            }
+          }
+
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getDataRange();
+          var values = range.getValues();
+          
+          var currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0);
+
+          // Start from the bottom to avoid indexing issues after deleting a row
+          for (var i = values.length - 1; i >= 1; i--) {
+            var row = values[i];
+            var deleteRow = false;
+
+            // Check columns G, H, I, J, K for dates
+            for (var j = 6; j <= 10; j++) { // Column indexes: G=6, H=7, I=8, J=9, K=10
+              if (row[j] instanceof Date && row[j] < currentDate) {
+                deleteRow = true;
+                break; // No need to check further columns if one is already in the past
+              }
+            }
+
+            if (deleteRow) {
+              linkCheckerLogSheet.deleteRow(i + 1); // +1 because array is 0-indexed but sheets are 1-indexed
+            }
+          }
+        }
+        
+        // check if there are still issues
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow() - 1, 4);
+          var values = range.getValues();
+
+          // Prepare campaign asset data to be written
+          var campaignAssetData = values.map(row => {
+            var error = 'Broken link found in ' + row[1] + ' on ad campaign level. Url: ' + row[0]; // Prepend text to URL
+            return ["Link checker", frequency, todayString, row[2], null, null, error]; // Arrange data in the new order
+          });
+        }
+
+        // Export all ad group assets with broken url to a sheet
+        var adGroupAssetData = "";
+        
+        var query = AdsApp.report(
+          `
+          SELECT 
+            asset.final_urls, 
+            ad_group_asset.field_type, 
+            campaign.name, 
+            ad_group.name, 
+            campaign.status, 
+            ad_group.status,
+            campaign.experiment_type, 
+            campaign.end_date, 
+            asset.callout_asset.end_date, 
+            asset.mobile_app_asset.end_date, 
+            asset.promotion_asset.end_date, 
+            asset.sitelink_asset.end_date,
+            asset.promotion_asset.redemption_end_date 
+          FROM ad_group_asset 
+          WHERE 
+            asset.final_urls CONTAINS ANY ('` + brokenUrlsString + `') 
+            AND ad_group_asset.status = 'ENABLED' 
+            AND campaign.status = 'ENABLED' 
+            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.experiment_type != 'EXPERIMENT' 
+            AND ad_group.status = 'ENABLED' 
+          `
+        );
+
+        query.exportToSheet(linkCheckerLogSheet);
+        
+        // Check and remove empty URLs in Column A
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          for (var row = lastRow; row >= 2; row--) {
+            var url = linkCheckerLogSheet.getRange(row, 1).getValue();
+            if (!url || url.trim() === '') {
+              linkCheckerLogSheet.deleteRow(row);
+            }
+          }
+
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getDataRange();
+          var values = range.getValues();
+          
+          var currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0);
+
+          // Start from the bottom to avoid indexing issues after deleting a row
+          for (var i = values.length - 1; i >= 1; i--) {
+            var row = values[i];
+            var deleteRow = false;
+
+            // Check columns I, J, K, L, M for dates
+            for (var j = 8; j <= 12; j++) { // Column indexes: I=8, J=9, K=10, L=11, M=12
+              if (row[j] instanceof Date && row[j] < currentDate) {
+                deleteRow = true;
+                break; // No need to check further columns if one is already in the past
+              }
+            }
+
+            if (deleteRow) {
+              linkCheckerLogSheet.deleteRow(i + 1); // +1 because array is 0-indexed but sheets are 1-indexed
+            }
+          }
+        }
+        
+        // check if there are still issues
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          
+          // Get the values from the second row onwards
+          var range = linkCheckerLogSheet.getRange(2, 1, linkCheckerLogSheet.getLastRow() - 1, 4);
+          var values = range.getValues();
+
+          // Prepare ad group asset data to be written
+          var adGroupAssetData = values.map(row => {
+            var error = 'Broken link found in ' + row[1] + ' on ad group level. Url: ' + row[0]; // Prepend text to URL
+            return ["Link checker", frequency, todayString, row[2], row[3], null, error]; // Arrange data in the new order
+          });
+        }
+        
+        // Clear original data range
+        linkCheckerLogSheet.clearContents();
+
+        // Write the new data starting from the second row
+        if(adData) {
+          linkCheckerLogSheet.getRange(linkCheckerLogSheet.getLastRow() + 1, 1, adData.length, adData[0].length).setValues(adData);
+        }
+        if(assetGroupData) {
+          linkCheckerLogSheet.getRange(linkCheckerLogSheet.getLastRow() + 1, 1, assetGroupData.length, assetGroupData[0].length).setValues(assetGroupData);
+        }
+        if(accountAssetData) {
+          linkCheckerLogSheet.getRange(linkCheckerLogSheet.getLastRow() + 1, 1, accountAssetData.length, accountAssetData[0].length).setValues(accountAssetData);
+        }
+        if(campaignAssetData) {
+          linkCheckerLogSheet.getRange(linkCheckerLogSheet.getLastRow() + 1, 1, campaignAssetData.length, campaignAssetData[0].length).setValues(campaignAssetData);
+        }
+        if(adGroupAssetData) {
+          linkCheckerLogSheet.getRange(linkCheckerLogSheet.getLastRow() + 1, 1, adGroupAssetData.length, adGroupAssetData[0].length).setValues(adGroupAssetData);
+        }
+        
+        // check if there are still issues
+        var lastRow = linkCheckerLogSheet.getLastRow();
+        if(lastRow > 1) {
+          //Logger.log("!!!Broken links found")
+          
+          // copy the issues
+          var range = linkCheckerLogSheet.getRange('A1:G' + linkCheckerLogSheet.getLastRow());
+          var values = range.getValues();
+
+          // Prepare data for mailBody. Get the range and values for columns D to G
+          var lastRow = linkCheckerLogSheet.getLastRow();
+          var rangeDG = linkCheckerLogSheet.getRange(1, 4, lastRow, 4); // Range D1:GlastRow
+          var valuesDG = rangeDG.getValues();
+
+          // Move columns D-G to C-F
+          var rangeCF = linkCheckerLogSheet.getRange(1, 3, lastRow, 4); // Range C1:FlastRow
+          rangeCF.setValues(valuesDG);
+
+          // Move check name from column A to B
+          var rangeA = linkCheckerLogSheet.getRange(1, 1, lastRow, 1); // Range A1:AlastRow
+          var valuesA = rangeA.getValues();
+          var rangeB = linkCheckerLogSheet.getRange(1, 2, lastRow, 1); // Range B1:BlastRow
+          rangeB.setValues(valuesA);
+
+          // Fill column A with accountName
+          var accountNames = Array(lastRow).fill([accountName]);
+          var rangeAfill = linkCheckerLogSheet.getRange(1, 1, lastRow, 1); // Range A1:AlastRow
+          rangeAfill.setValues(accountNames);
+
+          // copy the issues for mailBody
+          var range = linkCheckerLogSheet.getRange('A1:F' + linkCheckerLogSheet.getLastRow());
+          var values = range.getValues();
+
+          // Find the first empty row in the mailBody sheet
+          var lastRow = mailbodySheet.getLastRow();
+          var mailbodySheetRange = mailbodySheet.getRange(lastRow + 1, 1, values.length, values[0].length);
+
+          // Paste the issues in the mailBody sheet and update log sheet
+          mailbodySheetRange.setValues(values);
+          logSheet.appendRow(["Link Checker", accountId, todayString]);
+        }
+      }
+      
+      addAccountName(accountName);
+    }
+    
+    function getStatusCodes(response, finalUrl) {
+      var statusCode = response.getResponseCode();
+      if (statusCode != 200) {
+        logBrokenLink(finalUrl + " (status: " + statusCode + ")");
+      } else {
+        logWorkingLink(finalUrl);
+      }
+    }
+    
+
+    
+    // If a link is broken it's logged in a sheet. When the found to be broken during the second time then it will be added to the alert
+    function logBrokenLink(finalUrl, statusCode) {
+      //Logger.log(statusCode + " - " + finalUrl)
+      var lastRow = brokenLinksSheet.getLastRow();
+        if(lastRow > 1) {
+        var urlsRange = brokenLinksSheet.getRange(1, 1, lastRow, 1); // Assuming URLs are in column A starting from row 1
+        var urls = urlsRange.getValues();
+        var urlFound = false;
+
+        // Check if finalUrl is already in the list
+        for (var i = 0; i < urls.length; i++) {
+          if (urls[i][0] === finalUrl) {
+            // URL found, mark as "Broken link" in column C
+            brokenLinksSheet.getRange(i + 1, 3).setValue("Broken link");
+            brokenLinksSheet.getRange(i + 1, 4).setValue(accountName);
+            urlFound = true;
+            break;
+          }
+        }
+      }
+
+      // If URL not found, add it to the first empty row
+      if (!urlFound) {
+        var firstEmptyRow = lastRow + 1;
+        brokenLinksSheet.getRange(firstEmptyRow, 1).setValue(finalUrl); // Set URL in column A
+        brokenLinksSheet.getRange(firstEmptyRow, 2).setValue("Broken link"); // Mark as "Broken link" in column B
+        brokenLinksSheet.getRange(firstEmptyRow, 4).setValue(accountName);
+      }
+    }
+    
+    // Log all working links so they don't have to be checked in other runs on the same day
+    function logWorkingLink(finalUrl, statusCode) {
+      //Logger.log(statusCode + " - " + finalUrl)
+      // Fetch existing URLs from Column A, starting from row 1
+      var lastRow = checkedLinksSheet.getLastRow();
+      var range = checkedLinksSheet.getRange('A1:A' + lastRow);
+      var urls = range.getValues().flat(); // Flatten the 2D array to 1D
+
+      // Check if the final url is already in the list
+      if (urls.indexOf(finalUrl) === -1) {
+        // If not found, add final url to the first empty row in Column A and the accountName in column B
+        checkedLinksSheet.getRange('A' + (lastRow + 1)).setValue(finalUrl);
+        checkedLinksSheet.getRange('B' + (lastRow + 1)).setValue(accountName);
+      }
+    }
+  }
+
+//----------------------------- END LINK CHECKER ----------------------------- ----------------------------- ----------------------------- -----------------------------
+  
+//----------------------------- START NEW CONVERSION CHECK -----------------------------
+  function newConvCheck(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      var accountName = AdsApp.currentAccount().getName();
+      //Logger.log(accountName);
+      
+      var timeZone = AdsApp.currentAccount().getTimeZone();
+      var dayBeforeYesterday = getFormatedDate(2, "yyyyMMdd", timeZone);
+      var lookBackPeriod = getFormatedDate(90, "yyyyMMdd", timeZone);
+      var conversionsYesterdayArray = [];
+      var conversionsHistoryArray = [];
+
+      // get conversions of yesterday
+      var report = AdsApp.report(
+        "SELECT segments.conversion_action_name, metrics.conversions " +
+        "FROM campaign " +
+        "WHERE segments.date DURING YESTERDAY AND metrics.conversions > 0");
+
+      // push all conversion actions of yesterday in an array
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var conversionName = row['segments.conversion_action_name'];
+        conversionsYesterdayArray.push(conversionName);
+      }
+
+      // deduplicate conversions
+      var uniqueConversionsYesterday = [...new Set(conversionsYesterdayArray)];
+      //Logger.log("Yesterday conversions: " + uniqueConversionsYesterday);
+
+      // get conversions of last 31 days excluding yesterday
+      var report = AdsApp.report(
+        "SELECT segments.conversion_action_name, metrics.conversions " +
+        "FROM campaign " +
+        "WHERE segments.date BETWEEN '" + lookBackPeriod +"' AND '" + dayBeforeYesterday + "' AND metrics.conversions > 0");
+
+      // push all conversion actions over de last 91 days excluding yesterday in an array
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var conversionName = row['segments.conversion_action_name'];
+        //Logger.log("History conversions: " + conversionName);
+        conversionsHistoryArray.push(conversionName);
+      }
+
+      // deduplicate conversions
+      var uniqueConversionsHistory = [...new Set(conversionsHistoryArray)];
+      //Logger.log("History conversions: " + uniqueConversionsHistory);
+
+      // compare conversions
+      const noNewConversions = uniqueConversionsYesterday.every(r=> uniqueConversionsHistory.indexOf(r) >= 0)
+      
+      // get new conversions
+      var newUniqueConversions = uniqueConversionsYesterday.filter(conversion => !uniqueConversionsHistory.includes(conversion));
+      var numberOfNewConversions = newUniqueConversions.length;
+      var newUniqueConversionsAsString = newUniqueConversions.join(', ');
+
+      //Logger.log(noNewConversions);
+      if(numberOfNewConversions == 0) {
+        Logger.log(frequency + " -- " + accountName + " -- New conversions found -- No new conversions");
+        logSheet.appendRow(["New conversions found", accountId, todayString]);
+      } else {
+        Logger.log(frequency + " -- " + accountName + " -- New conversions found -- A New conversions");
+        logSheet.appendRow(["New conversions found", accountId, todayString]);
+        mailbodySheet.appendRow([accountName, "New conversions found", " ", " ", " ", "A new conversion is measured: " + newUniqueConversionsAsString]);  
+      }
+      addAccountName(accountName)
+    } 
+  }
+  
+//----------------------------- END NEW CONVERSION CHECK -----------------------------
+  
+//----------------------------- START TROAS CHECK -----------------------------
+  function tROASCheck(frequency, accountName, logSheet, mailbodySheet, accountId, minTRoas){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      var issuesFound = false;
+      var minTRoasCorrected = minTRoas / 100;
+      var campaignsWithLowTroas = [];
+      
+      // Check the ROAS on campaign level
+      var report = AdsApp.report(
+          "SELECT campaign.name, campaign.maximize_conversion_value.target_roas, campaign.target_roas.target_roas, " +
+          "bidding_strategy.target_roas.target_roas, bidding_strategy.maximize_conversion_value.target_roas " +
+          "FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT' AND campaign.end_date > '" + todayString + "'");
+      
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var campaignName = row['campaign.name'];
+        var targetRoas1 = row['campaign.maximize_conversion_value.target_roas'];
+        var targetRoas2 = row['campaign.target_roas.target_roas'];
+        var targetRoas3 = row['bidding_strategy.target_roas.target_roas'];
+        var targetRoas4 = row['bidding_strategy.maximize_conversion_value.target_roas'];
+        
+        // Array containing all variables
+        var variables = [targetRoas1, targetRoas2, targetRoas3, targetRoas4];
+
+        // Find the variable with a number
+        var targetRoasWithNumber = variables.find(variable => typeof variable === 'number');
+
+        // Multiply it by 100
+        var targetRoasWithNumber = targetRoasWithNumber * 100;
+        if(targetRoasWithNumber < minTRoas){
+          var issuesFound = true;
+          // store campaigns with lower tROAS so they don't have to be checked during ad group level check
+          campaignsWithLowTroas.push(campaignName);
+          mailbodySheet.appendRow([accountName, "Target ROAS check", campaignName, " ", " ", "This campaign has a tROAS of " + targetRoasWithNumber + "% which is below the minimum tROAS of " + minTRoas + "%"]);  
+        }
+      }
+      
+      const campaignsWithLowTroasAsString = campaignsWithLowTroas.join("','");
+      
+      // Check the ROAS on ad group level for ad_group.target_roas
+      var report = AdsApp.report(
+        "SELECT campaign.name, ad_group.name, ad_group.id, campaign.target_roas.target_roas FROM ad_group WHERE campaign.target_roas.target_roas < " + minTRoasCorrected + " AND campaign.name NOT IN ('" + campaignsWithLowTroasAsString + "') AND campaign.status = 'ENABLED' AND ad_group.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT'");
+      
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var campaignName = row['campaign.name'];
+        var adgroupName = row['ad_group.name'];
+        var adgroupId = row['ad_group.id'];
+        var targetRoas = row['campaign.target_roas.target_roas'];
+        
+        // Multiply it by 100
+        var targetRoas = targetRoas * 100;
+        var issuesFound = true;
+        mailbodySheet.appendRow([accountName, "Target ROAS check", campaignName, adgroupName, " ", "This ad group has a tROAS of " + targetRoas + "% which is below the minimum tROAS of " + minTRoas + "%"]);  
+      }
+        
+      // Log if issues are found
+      if(issuesFound) {
+        logSheet.appendRow(["Target ROAS check", accountId, todayString]);
+      }
+      addAccountName(accountName);
+    }
+  }  
+//----------------------------- END TROAS CHECK -----------------------------
+  
+//----------------------------- START MAX SEARCH TERM CHECK -----------------------------
+  function maxSearchTermCpcCheck(frequency, accountName, logSheet, mailbodySheet, accountId, maxSearchTermCpc) {
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    var issuesFound = false;
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      
+      // Get all search terms with a high CPC
+      var report = AdsApp.report(
+        "SELECT campaign.name, ad_group.name, search_term_view.search_term, metrics.average_cpc " +
+        "FROM search_term_view WHERE metrics.average_cpc > " + maxSearchTermCpc * 1000000 + " AND campaign.status = 'ENABLED' " +
+        "AND ad_group.status = 'ENABLED' AND segments.date DURING YESTERDAY AND campaign.experiment_type != 'EXPERIMENT'");
+      
+      var rows = report.rows();
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var campaignName = row['campaign.name'];
+        var adgroupName = row['ad_group.name'];
+        var searchTerm = row['search_term_view.search_term'];
+        var cpc = row['metrics.average_cpc'];
+        var cpcCorrected = cpc / 1000000;
+        var cpcCorrected = cpcCorrected.toFixed(2);
+        
+        var issuesFound = true;
+        mailbodySheet.appendRow([accountName, "Search term CPC check", campaignName, adgroupName, searchTerm, "Yesterday this search term had a CPC of €" + cpcCorrected + " which is above the maximum CPC of €" + maxSearchTermCpc + "."]);  
+      }
+      addAccountName(accountName);
+    }
+    // Log if issues are found
+    if(issuesFound) {
+      logSheet.appendRow(["Search term CPC check", accountId, todayString]);
+    }
+  }
+  
+//----------------------------- END MAX SEARCH TERM CHECK -----------------------------
+  
+//----------------------------- START DISAPPROVED PRODUCTS -----------------------------
+  
+  function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold){
+    var productIdToInclude = [];
+    var productIdToExclude = [];
+    //var productThreshold = productThreshold / 100;
+    
+    var pageToken;
+    var maxResults = 250;
+    // These variables are used to fetch all the products (maximum of 250) on a page
+    // in the merchant centre. We can then iterate over the pages by using the next
+    // page token which is given as part of the response to our request.
+
+    var totalProducts = 0;
+    var numberDisapprovedProducts = 0;
+
+    do {
+      // This is a quick check to see if the filters supplied are valid
+      checkFiltersDontContradict(productIdToInclude, productIdToExclude);
+
+      var productStatuses = ShoppingContent.Productstatuses.list(merchantCenterId, {
+        pageToken: pageToken,
+        maxResults: maxResults
+      });
+
+      // If the 'approvalStatus' of our product is not 'approved' then we say it is disapproved.
+      if (productStatuses.resources) {
+        //Logger.log(productStatuses.resources.length + " products found");
+        if(productStatuses.resources.length > 1000){
+          var productLimit = 1000;
+        } else {
+          var productLimit = productStatuses.resources.length;
+        }
+        for (var i = 0; i < productLimit; i++) {
+          product = productStatuses.resources[i];
+          if (satisfiesAllFilters(product, productIdToInclude, productIdToExclude)) {
+            totalProducts += 1;
+            var problemen = (product['destinationStatuses'][0]['status']);
+            //Logger.log(i + " " + problemen);
+            if (product['destinationStatuses'][0]['status'] == 'disapproved') {
+              numberDisapprovedProducts++;
+            }
+          }
+        }
+      } else {
+        Logger.log('No more products in account ' + merchantCenterId);
+      }
+      // We then pull our next PageToken from our response and use it to make a new request.
+      // If there is no next PageToken then we exit our iteration.
+      pageToken = productStatuses.nextPageToken;
+    } while (pageToken);
+
+    var disapprovalPercentage = (numberDisapprovedProducts * 100) / totalProducts;
+    Logger.log(frequency + " -- " + accountName + " -- Disapproved products -- " + numberDisapprovedProducts + ' of ' + totalProducts
+      + ' products in your account were disapproved - '
+      + disapprovalPercentage.toFixed(2) + '%')
+    
+    Logger.log(disapprovalPercentage + " " + productThreshold);
+    // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
+    if (disapprovalPercentage >= productThreshold) {
+      logSheet.appendRow(["Disapproved products", accountId, todayString]);
+      mailbodySheet.appendRow([accountName, "Disapproved products", "", "", "", numberDisapprovedProducts + ' of ' + totalProducts + ' products in your GMC (' + merchantCenterId + ') were disapproved - ' + disapprovalPercentage.toFixed(2) + '%' + '\n']);  
+    }
+    logSheet.appendRow(["Disapproved products", accountId, todayString]);
+  }
+
+  function checkFiltersDontContradict(productIdToInclude, productIdToExclude) {
+    if (productIdToInclude.length && productIdToExclude.length) {
+      for (var i in productIdToInclude) {
+        if (productIdToExclude.indexOf(productIdToInclude[i]) > -1) {
+          throw "Filters have shared values - can not include and exclude simultaneously";
+        }
+      }
+    } else {
+      return true;
+    }
+  }
+
+  function satisfiesAllFilters(product, productIdToInclude, productIdToExclude) {
+    return (satisfiesIdIncludeFilters(productIdToInclude, product)
+      && satisfiesIdExcludeFilters(productIdToExclude, product));
+  }
+
+  function satisfiesIdIncludeFilters(productIdToInclude, product) {
+    if (productIdToInclude.length) {
+      for (index = 0; index < productIdToInclude.length; ++index) {
+        if (product['productId'].indexOf(productIdToInclude[index]) !== -1) {
+          return true;
+        }
+      }
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
+
+  function satisfiesIdExcludeFilters(productIdToExclude, product) {
+    if (productIdToExclude.length) {
+      for (index = 0; index < productIdToExclude.length; ++index) {
+        if (product['productId'].indexOf(productIdToExclude[index]) == -1) {
+          return true;
+        }
+      }
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
+  
+//----------------------------- END DISAPPROVED PRODUCTS -----------------------------
+  
+//----------------------------- START BUDGET MONITORING -----------------------------
+  
+  function budgetMonitoring(frequency, accountName, logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, accountRow, limitType){
+    if(!accountBudget){
+      mailbodySheet.appendRow([accountName, "Budget monitoring error", "", "", " ", "No budget is given."]);
+      return
+    }
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    // Open the Link Checker Log sheet by its name   
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+    
+      // Create query
+      var whereClause = "WHERE segments.date DURING THIS_MONTH";
+      
+      // Filter on Search, Shopping and Pmax if checked
+      if(campaignType) {
+        var whereClause = whereClause + " AND campaign.advertising_channel_type IN ('PERFORMANCE_MAX', 'SEARCH', 'SHOPPING')";
+      }
+      var query = "SELECT metrics.cost_micros FROM campaign " + whereClause;
+
+      // Sum the total spend
+      var report = AdsApp.report(query);
+      var rows = report.rows();
+
+      var totalSpend = 0;
+      while (rows.hasNext()) {
+        var row = rows.next();
+        totalSpend += parseFloat(row['metrics.cost_micros']);
+      }
+
+      // Divide the sum by 1,000,000 and assign it to spendMtD
+      var spendMtD = totalSpend / 1000000;
+      var spendMtD = Math.round(spendMtD)
+      
+      // Get Nth day if the month
+      var today = new Date();
+      var dayOfMonth = today.getDate();
+      var getDaysInCurrentMonth = getDaysInCurrentMonth();
+      
+      // get column and set day pacing 
+      var dayPacingPosition = checkNames.indexOf('Day pacing') + 3;
+      var dayPacing = dayOfMonth / getDaysInCurrentMonth;
+      settingsSheet.getRange(accountRow + 7, dayPacingPosition).setValue(dayPacing);
+      
+      // get column and set spend pacing 
+      var spendPacingPosition = checkNames.indexOf('Spend pacing') + 3;
+      var spendPacing = spendMtD / accountBudget;
+      settingsSheet.getRange(accountRow + 7, spendPacingPosition).setValue(spendPacing);
+      
+      var acceptedDeviation = 100 * (0.88 ** (dayOfMonth - 2));
+      
+      var spendLine = Math.round(accountBudget / getDaysInCurrentMonth * (dayOfMonth));
+      
+      var lowSpendline = Math.round(spendLine - (spendLine * (acceptedDeviation / 100)));
+      var highSpendline = Math.round(spendLine + (spendLine * (acceptedDeviation / 100)));
+      Logger.log(lowSpendline);
+      Logger.log("Account budget: " + accountBudget + ". Only search, Pmax and shopping: " 
+                  + campaignType + ". Spend line: " + spendMtD + "; low spendline: " + lowSpendline 
+                  + " high spendline: " + highSpendline);
+      
+      if(spendMtD < lowSpendline && !limitType) {
+        Logger.log("The spend might be too low. The MtD spend is €" + spendMtD + ". The spendline is €" + spendLine + ".")
+        mailbodySheet.appendRow([accountName, "Budget monitoring", "", "", " ", "The spend might be too low. The MtD spend is €" + spendMtD + ". The spendline is €" + spendLine + "."]);  
+        logSheet.appendRow(["Budget monitoring", accountId, todayString]);
+      } else if(spendMtD > highSpendline) {
+        Logger.log("The spend might be too high. The MtD spend is €" + spendMtD + ". The spendline is €" + spendLine)
+        mailbodySheet.appendRow([accountName, "Budget monitoring", "", "", " ", "The spend might be too high. The MtD spend is €" + spendMtD + ". The spendline is €" + spendLine + "."]);
+        logSheet.appendRow(["Budget monitoring", accountId, todayString]);
+      }
+      addAccountName(accountName);
+    }
+    
+    
+    function getDaysInCurrentMonth() {
+      var today = new Date();
+      var year = today.getFullYear();
+      var month = today.getMonth(); // Month is 0-indexed (0 for January, 1 for February, etc.)
+
+      // Get the first day of the next month
+      var firstDayNextMonth = new Date(year, month + 1, 1);
+
+      // Subtract one day to get the last day of the current month
+      var lastDayCurrentMonth = new Date(firstDayNextMonth - 1);
+
+      // Return the day number of the last day of the current month
+      return lastDayCurrentMonth.getDate();
+    }
+    
+  }
+  
+  
+//----------------------------- END BUDGET MONITORING -----------------------------
+  
+//----------------------------- START CONVERSION RECENCY CHECK -----------------------------
+  
+  function daysSinceLastConversion(frequency, accountName, logSheet, mailbodySheet, accountId, daysToCheck){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var today = new Date();
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+    
+    // Open the Link Checker Log sheet by its name   
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+      
+      // Construct the query to get conversions in the last 30 days by day
+      var query = "SELECT metrics.conversions, segments.date FROM customer WHERE segments.date DURING LAST_30_DAYS ORDER BY segments.date DESC";
+
+      var report = AdsApp.report(query);
+      var rows = report.rows();
+      
+      while (rows.hasNext()) {
+        var row = rows.next();
+        var date = (row['segments.date']);
+        var conversions = parseInt(row['metrics.conversions']);
+        
+        // Convert the date string to a Date object
+        var dateObject = new Date(date + 'T00:00:00');
+        
+        // Calculate the difference in time (in milliseconds)
+        var differenceInTime = today - dateObject;
+
+        // Convert the difference from milliseconds to days
+        var daysAgo = Math.floor(differenceInTime / (1000 * 60 * 60 * 24));
+                
+        if(conversions > 0 && daysAgo <= daysToCheck) {
+          Logger.log(frequency + " -- " + accountName + " -- Conversion recency check -- Last conversions measured on " + date + ". This was " + daysAgo + " ago which is within the limit of " + daysToCheck + " days.");
+          logSheet.appendRow(["Conversion recency check", accountId, today]);
+          break
+        } else if (conversions > 0 && daysAgo > daysToCheck) {
+          Logger.log(frequency + " -- " + accountName + " -- Conversion recency check -- The last conversion was on " + date + ". This was " + daysAgo + " ago which is outside the limit of " + daysToCheck + " days.");
+          logSheet.appendRow(["Conversion recency check", accountId, todayString]);
+          mailbodySheet.appendRow([accountName, "Conversion recency check", " ", " ", " ", "The last conversion was on " + date + ". This was " + daysAgo + " ago which is outside the limit of " + daysToCheck + " days."]);
+          break
+        } else if (!rows.hasNext()){
+          Logger.log(frequency + " -- " + accountName + " -- Conversion recency check -- No conversions found in the last 30 days.");
+          logSheet.appendRow(["Conversion recency check", accountId, todayString]);
+          mailbodySheet.appendRow([accountName, "Conversion recency check", " ", " ", " ", "No conversion found in the last 30 days, which is outside the limit of " + daysToCheck + " days."]);
+          break
+        }
+      }
+    }
+  }
+  
+//----------------------------- END CONVERSION RECENCY CHECK -----------------------------
+
+
+//----------------------------- START UTM TAGGING -----------------------------
+
+  function utmTagging(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var today = new Date();
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+    
+    // Open the account by name
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+
+      tryHandleCampaigns(AdsApp.campaigns(), "Standard & Others");
+      tryHandleCampaigns(AdsApp.shoppingCampaigns(), "Shopping");
+      tryHandleCampaigns(AdsApp.performanceMaxCampaigns(), "Performance Max");
+    }
+
+    function tryHandleCampaigns(campaignIteratorFunction, campaignType) {
+      try {
+        handleCampaigns(campaignIteratorFunction, campaignType);
+      } catch (e) {
+        Logger.log("Error processing " + campaignType + " campaigns: " + e.message);
+      }
+    }
+
+    function handleCampaigns(campaignIteratorFunction, campaignType) {
+      var campaignIterator = campaignIteratorFunction
+        .withCondition("Status = ENABLED")
+        .withCondition('campaign.end_date > "' + todayString + '"')
+        .get();
+
+      while (campaignIterator.hasNext()) {
+        var campaign = campaignIterator.next();
+        try {
+          var trackingTemplate = "utm_source=google&utm_medium=cpc&utm_campaign="+encodeURIComponent(campaign.getName())+"&utm_id=" + campaign.getId()+"&utm_term={keyword}";
+          campaign.urls().setFinalUrlSuffix(trackingTemplate);
+        } catch (e) {
+          Logger.log("Error processing campaign " + campaign.getId() + " in " + campaignType + ": " + e.message);
+        }
+      }
+    }
+    logSheet.appendRow(["UTM tagging", accountId, todayString]);
+  }
+
+//----------------------------- END UTM TAGGING -----------------------------
+
+//----------------------------- START ACTIVE KEYWORD OR AD -----------------------------
+  function activeAdOrKeyword(frequency, accountName, logSheet, mailbodySheet, accountId){
+    var issues = false;
+    var accountIdClean = accountId.replace(/-/g, '');
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+    
+    // Open the Link Checker Log sheet by its name   
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+
+      var adGroupsWithAds = new Set();
+      var adGroupsWithKeywords = new Set();
+      var allAdGroups = new Map();
+      var allKeywordAdGroups = new Map();
+      var rowsToAppend = [];
+
+      // --- 1. Alle actieve ad groups ophalen ---
+      var adGroupQuery = `
+        SELECT campaign.id, ad_group.id, ad_group.name, campaign.name
+        FROM ad_group
+        WHERE ad_group.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND campaign.experiment_type = 'BASE'
+          AND campaign.end_date > '` + todayString + `' 
+      `;
+      var adGroupRows = AdsApp.search(adGroupQuery);
+      while (adGroupRows.hasNext()) {
+        var row = adGroupRows.next();
+        allAdGroups.set(row.adGroup.id, {
+          campaignName: row.campaign.name,
+          adGroupName: row.adGroup.name
+        });
+      }
+
+      // --- 2. Alle actieve advertenties per ad group ---
+      var adQuery = `
+        SELECT ad_group.id
+        FROM ad_group_ad
+        WHERE ad_group_ad.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND ad_group.status = 'ENABLED'
+      `;
+      var adRows = AdsApp.search(adQuery);
+      while (adRows.hasNext()) {
+        var row = adRows.next();
+        adGroupsWithAds.add(row.adGroup.id);
+      }
+
+      // --- 3. Alle actieve non-DSA ad groups (search only) ---
+      var keywordAdGroupQuery = `
+        SELECT campaign.id, ad_group.id, ad_group.name, campaign.name
+        FROM ad_group
+        WHERE ad_group.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND campaign.advertising_channel_type = 'SEARCH'
+          AND campaign.end_date > '` + todayString + `'
+          AND ad_group.type != 'SEARCH_DYNAMIC_ADS'
+      `;
+      var keywordAdGroupRows = AdsApp.search(keywordAdGroupQuery);
+      while (keywordAdGroupRows.hasNext()) {
+        var row = keywordAdGroupRows.next();
+        allKeywordAdGroups.set(row.adGroup.id, {
+          campaignName: row.campaign.name,
+          adGroupName: row.adGroup.name
+        });
+      }
+
+      // --- 4. Alle actieve keywords per ad group ---
+      var keywordQuery = `
+        SELECT ad_group.id
+        FROM ad_group_criterion
+        WHERE ad_group_criterion.type = 'KEYWORD'
+          AND ad_group_criterion.status = 'ENABLED'
+          AND campaign.status = 'ENABLED'
+          AND ad_group.status = 'ENABLED'
+          AND ad_group_criterion.negative = FALSE
+      `;
+      var keywordRows = AdsApp.search(keywordQuery);
+      while (keywordRows.hasNext()) {
+        var row = keywordRows.next();
+        adGroupsWithKeywords.add(row.adGroup.id);
+      }
+
+      // --- 5. Controleer ad groups zonder actieve ads ---
+      for (var [adGroupId, info] of allAdGroups.entries()) {
+        if (!adGroupsWithAds.has(adGroupId)) {
+          issues = true;
+          rowsToAppend.push([
+            accountName,
+            "Active ad check",
+            info.campaignName,
+            info.adGroupName,
+            "",
+            "No active ad was found in this ad group."
+          ]);
+        }
+      }
+
+      // --- 6. Controleer ad groups zonder actieve keywords ---
+      for (var [adGroupId, info] of allKeywordAdGroups.entries()) {
+        if (!adGroupsWithKeywords.has(adGroupId)) {
+          issues = true;
+          rowsToAppend.push([
+            accountName,
+            "Active keyword check",
+            info.campaignName,
+            info.adGroupName,
+            "",
+            "No active keyword was found in this ad group."
+          ]);
+        }
+      }
+
+      // --- 7. Voeg in bulk issues toe aan de sheet ---
+      if (rowsToAppend.length > 0) {
+        mailbodySheet.getRange(mailbodySheet.getLastRow() + 1, 1, rowsToAppend.length, 6).setValues(rowsToAppend);
+      }
+
+      // --- 8. Log status als er issues zijn gevonden ---
+      if (issues) {
+        logSheet.appendRow(["Active ad or keyword", accountId, todayString]);
+      }
+    }
+  }
+
+//----------------------------- END ACTIVE KEYWORD OR AD -----------------------------
+  
+//----------------------------- START Lin Rodnitzky Ratio -----------------------------
+
+  function linRodnitzkyRatio(frequency, accountName, logSheet, mailbodySheet, accountId, daysToCheck){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var today = new Date();
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+    
+    // Open the Link Checker Log sheet by its name   
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+
+      let totalCost = 0;
+      let totalConversions = 0;
+  
+      let convertingCost = 0;
+      let convertingConversions = 0;
+  
+      // Retrieve search terms performance
+      const report = AdsApp.report(`
+        SELECT
+          search_term_view.search_term, 
+          metrics.cost_micros, 
+          metrics.conversions 
+        FROM 
+          search_term_view 
+        WHERE 
+          segments.date DURING LAST_MONTH
+      `);
+  
+      const rows = report.rows();
+  
+      while (rows.hasNext()) {
+        const row = rows.next();
+        const cost = parseFloat(row['metrics.cost_micros']);
+        const conversions = parseFloat(row['metrics.conversions']);
+  
+        totalCost += cost;
+        totalConversions += conversions;
+  
+        if (conversions > 0) {
+          convertingCost += cost;
+          convertingConversions += conversions;
+        }
+      }
+  
+      if (totalConversions > 0 && convertingConversions > 0) {
+        const overallCPA = totalCost / totalConversions;
+        const convertingCPA = convertingCost / convertingConversions;
+  
+        const linRodnitzkyRatio = overallCPA / convertingCPA;
+
+        let performanceMessage = "";
+
+        if (linRodnitzkyRatio < 1.5) {
+          performanceMessage = "Too conservative. Likely missing incremental, profitable conversions.";
+        } else if (linRodnitzkyRatio >= 1.5 && linRodnitzkyRatio < 2.0) {
+          performanceMessage = "Well-managed. A good mix of consistent winners and growth tests.";
+        } else if (linRodnitzkyRatio >= 2.0 && linRodnitzkyRatio < 2.5) {
+          performanceMessage = "Too aggressive. Wasteful clicks may be due to broad match or poor analysis.";
+        } else if (linRodnitzkyRatio >= 2.5) {
+          performanceMessage = "Mismanaged. Significant wasted spend. Needs immediate optimization.";
+        }
+  
+        Logger.log(frequency + " -- " + accountName + " -- Lin Rodnitzky Ratio -- The Lin Rodnitzky Ratio " + linRodnitzkyRatio.toFixed(2) + ".");
+        logSheet.appendRow(["Lin Rodnitzky Ratio", accountId, todayString]);
+        mailbodySheet.appendRow([accountName, "Lin Rodnitzky Ratio", " ", " ", " ", "The Lin Rodnitzky Ratio " + linRodnitzkyRatio.toFixed(2) + ". " + performanceMessage]);
+
+      } else {
+        Logger.log(
+          `Account: ${account.getName()} (${account.getCustomerId()}) | Not enough data for calculation.`
+        );
+      }
+    }
+  }
+
+//----------------------------- END Lin Rodnitzky Ratio -----------------------------
+  
+//----------------------------- START MERCHANT CENTER ID CHECK -----------------------------  
+  
+  function merchantCenterIdCheck(frequency, accountName, logSheet, mailbodySheet, accountId, row, column){
+    var accountIdClean = accountId.replace(/-/g, '');
+    var today = new Date();
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('customer_client.id = "' + accountIdClean + '"');
+
+    // Open the Link Checker Log sheet by its name   
+    var accountIterator = accountSelector.get();
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      AdsManagerApp.select(account);
+
+      // Get Merchent Center ID from performance max campaings
+      var query = `
+        SELECT 
+          campaign.shopping_setting.merchant_id, 
+          campaign.status, 
+          campaign.experiment_type, 
+          campaign.end_date 
+        FROM performance_max_placement_view 
+        WHERE 
+          campaign.status = 'ENABLED' 
+          AND campaign.experiment_type = 'BASE' 
+          AND campaign.end_date > '` + todayString + `' 
+        ORDER BY 
+          campaign.shopping_setting.merchant_id DESC
+      `;
+
+      // Execute the query and fetch results
+      var report = AdsApp.report(query);
+      var campaignData = report.rows();
+
+      // Check if there's a result and log the merchant ID
+      if (campaignData.hasNext()) {
+        var campaign = campaignData.next();
+        var merchantId = campaign['campaign.shopping_setting.merchant_id'];
+        if(merchantId) {
+          settingsSheet.getRange(row, column).setValue(merchantId);
+          settingsSheet.getRange(row, column + 1).setValue(0.05);
+          logSheet.appendRow(["Merchant Center ID check", accountId, todayString]);
+          mailbodySheet.appendRow([accountName, "Merchant Center ID check", " ", " ", " ", "Merchant Center ID " + merchantId + " is added to the AdHealth sheet for the account with an acceptable % of disapproved products of 5%."]);
+          Logger.log(frequency + " -- " + accountName + " -- Merchant Center ID check -- Merchant ID added: " + merchantId);
+        }
+      } else {
+        Logger.log(frequency + " -- " + accountName + " -- Merchant Center ID check -- No merchant ID found in performance max campaigns. Checking shopping campaigns");
+        // Get Merchent Center ID from performance max campaings
+        var query = `
+          SELECT 
+            campaign.shopping_setting.merchant_id, 
+            campaign.status, 
+            campaign.experiment_type, 
+            campaign.end_date 
+          FROM campaign 
+          WHERE 
+            campaign.status = 'ENABLED' 
+            AND campaign.experiment_type = 'BASE' 
+            AND campaign.end_date > '` + todayString + `' 
+          ORDER BY 
+            campaign.shopping_setting.merchant_id DESC
+        `;
+
+        // Execute the query and fetch results
+        var report = AdsApp.report(query);
+        var campaignData = report.rows();
+
+        // Check if there's a result and log the merchant ID
+        if (campaignData.hasNext()) {
+          var campaign = campaignData.next();
+          var merchantId = campaign['campaign.shopping_setting.merchant_id'];
+          if(merchantId) {
+            settingsSheet.getRange(row, column).setValue(merchantId);
+            settingsSheet.getRange(row, column + 1).setValue(0.05);
+            logSheet.appendRow(["Merchant Center ID check", accountId, todayString]);
+            mailbodySheet.appendRow([accountName, "Merchant Center ID check", " ", " ", " ", "Merchant Center ID " + merchantId + " is added to the AdHealth sheet for the account with an acceptable % of disapproved products of 5%."]);
+            Logger.log(frequency + " -- " + accountName + " -- Merchant Center ID check -- Merchant ID added: " + merchantId);
+          } else {
+          Logger.log(frequency + " -- " + accountName + " -- Merchant Center ID check -- No merchant ID found in shopping campaigns either.");
+          }
+        } 
+      }
+    }
+  }
+  
+  
+  
+
+  
+  
+//----------------------------- END MERCHANT CENTER ID CHECK -----------------------------
+
+//----------------------------- END CHECK SPECIFIC SCRIPTS -----------------------------  
+  
+//----------------------------- START SETUP -----------------------------
+  function setup() {
+    var sheetName = 'Settings';
+    var sheet = spreadsheet.getSheetByName(sheetName);
+
+    // Check if the "Settings" tab exists. If not, create it.
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(sheetName);
+      
+      var defaultSheet = spreadsheet.getSheetByName("Sheet1");
+      if(defaultSheet){
+        spreadsheet.deleteSheet(defaultSheet);
+      }
+      var defaultSheet = spreadsheet.getSheetByName("Blad1");
+      if(defaultSheet){
+        spreadsheet.deleteSheet(defaultSheet);
+      }
+
+      // Fill in "Account label" in A2, "Email" in A3, "Vakantie start" in F2, and "Vakantie end" in F3. Set order sheets option
+      sheet.getRange('A3').setValue('Account label');
+      sheet.getRange('A4').setValue('Email');
+      sheet.getRange('F3').setValue('Vakantie start');
+      sheet.getRange('F4').setValue('Vakantie end');
+      sheet.getRange('I3').setValue('DSA naming');
+      sheet.getRange('I4').setValue('E-mail whitelist');
+      sheet.getRange('I5').setValue('Domain or full email address, comma separated: netprofiler.nl,abc@clickvalue.nl');
+      sheet.getRange('I5').activate();
+      sheet.getActiveRangeList().setFontSize(9)
+        .setFontSize(9)
+        .setVerticalAlignment('top')
+        .setFontColor('#cccccc');
+      sheet.getRange('J3').setValue('DSA|dsa|dynamische|Dynamic');
+      sheet.getRange('J4').setValue('netprofiler.nl,leadscope.nl,clickvalue.nl,channable.com');      
+      sheet.getRange('O3:T3').mergeAcross();
+      sheet.getRange('O3').setFormula('=if(COUNTIF(O7:O22,true) >0,"Warning! The UTM tagging will overwrite the exsisting UTM tagging on campaing level.","")');
+      
+
+      // Add the following header to row 6.
+      var headers = [
+        'Account ID',
+        'Account Name',
+        'Account down',
+        'Link Checker',
+        'Unknown user made a change',
+        'Disapproved Ads',
+        'Active ad or keyword',
+        'Merchant Center ID',
+        'Acceptable % of disapproved products',
+        'Target ROAS check',
+        'Minimum target ROAS amount',
+        'Search term CPC check',
+        'Search term CPC amount',
+        'New conversions found',
+        'UTM tagging',
+        'Budget monitoring',
+        'Monthly budget',
+        'Only Shopping/ Pmax/Search',
+        'Upper limit only',
+        'Day pacing',
+        'Spend pacing',
+        'Conversion recency check',
+        'Days since last conversion',
+        'Lin Rodnitzky Ratio'
+      ];
+      sheet.getRange(6, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange('6:6').activate();
+      sheet.getActiveRangeList().setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    
+      var logSheets = ['HourlyLog', 'DailyLog', 'WeeklyLog', 'MonthlyLog', 'NeverLog', 'MailBody', 'accountLog', 'checkedLinks', 'Day pacing', 'Spend pacing'];
+      for (var i = 0; i < logSheets.length; i++) {
+        var sheetName = logSheets[i];
+        var logSheet = spreadsheet.getSheetByName(sheetName);
+        if (!logSheet) {
+          logSheet = spreadsheet.insertSheet(sheetName);
+
+          // Add the specified headers to row 1 of the "Log" tab and hide the sheet.
+          var logHeaders = ['Script', 'Account ID', 'Date'];
+          if(sheetName == 'MailBody') {
+            var logHeaders = ['Account name', 'Check', 'Campaign', 'Ad group', 'Search Term', 'Issue'];
+          } else if (sheetName == 'accountLog') {
+            var logHeaders = ['Account name', 'Script'];
+          } else if (sheetName == 'checkedLinks') {
+            var logHeaders = ['Working Links', 'Account name'];
+          } else if (sheetName == 'brokenLinks') {
+            var logHeaders = ['URL', 'First check', 'Second check', 'Account name'];
+          }
+          logSheet.getRange(1, 1, 1, logHeaders.length).setValues([logHeaders]);
+          logSheet.hideSheet();
+        }
+      }
+      
+      // Create linker checker log
+      var linkCheckerLogSheet = spreadsheet.insertSheet("LinkCheckerLog");
+      linkCheckerLogSheet.hideSheet();
+      
+      // Set formating to headers
+      sheet.getRange('A1:X1').activate();
+      sheet.getActiveRangeList().setBackground('#522887');
+      sheet.setRowHeight(1, 35);
+      sheet.getRange('A1').setValue('    Google Ads monitoring');
+      sheet.getRange('A1:O1').setVerticalAlignment('middle')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setFontSize(14);
+      sheet.getRange('P1:T1').setVerticalAlignment('middle')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setFontSize(14);
+      sheet.getRange('A6:X6').activate();
+      sheet.getActiveRangeList().setBackground('#d9d9d9');
+      
+      // Set conditional formating
+      var conditionalFormatRules = sheet.getConditionalFormatRules();
+      
+      // Highlight if "Acceptable % of disapproved products" is empty while Merchant Center ID is filled in
+      var rule1 = SpreadsheetApp.newConditionalFormatRule()
+        .setRanges([sheet.getRange('I7:I500')])
+        .whenFormulaSatisfied('=If(AND(Not(ISBLANK(H7)),ISBLANK(I7)),true,false)')
+        .setBackground('#F4CCCC')
+        .build();
+
+      // Highlight if account label or Email are empty
+      var rule2 = SpreadsheetApp.newConditionalFormatRule()
+        .setRanges([spreadsheet.getRange('B3:B4')])
+        .whenCellEmpty()
+        .setBackground('#EA4335')
+        .build();
+
+      // Highlight if UTM tagging is checked
+      var rule3 = SpreadsheetApp.newConditionalFormatRule()
+        .setRanges([spreadsheet.getRange('O3:T3')])
+        .whenCellNotEmpty()
+        .setBackground('#FF0000')
+        .setFontColor('#ffffff')
+        .build();
+      
+      conditionalFormatRules.push(rule1, rule2, rule3);
+      sheet.setConditionalFormatRules(conditionalFormatRules);
+      
+      sheet.setConditionalFormatRules(conditionalFormatRules);
+      sheet.getRange('S:T').activate();
+      sheet.getActiveRangeList().setNumberFormat('0%')
+      
+      return true;
+    }
+  }
+
+//----------------------------- END SETUP -----------------------------
+
+//----------------------------- START CHECK ACCOUNT -----------------------------
+// Checking if all account that have the label are in the sheet. If not, it's added.
+// Dropdown menu and default settings are added as well.  
+  
+  function checkAccount() {
+    var settingsSheet = spreadsheet.getSheetByName('Settings');
+
+    // Get all Google Ads account IDs from the "Settings" tab in column A.
+    var accountIdsInSheet = settingsSheet.getRange('A7:A').getValues().flat().filter(Boolean);
+    var numberOfAccounts = accountIdsInSheet.length;
+    
+    // Get all Google Ads accounts with the specified account label.
+    var accountSelector = AdsManagerApp.accounts()
+      .withCondition('LabelNames CONTAINS "' + accountLabel + '"');
+    var accountIterator = accountSelector.get();
+
+    // Check which accounts aren't in the sheet yet and add them.
+    while (accountIterator.hasNext()) {
+      var account = accountIterator.next();
+      var accountId = account.getCustomerId();
+      var accountName = account.getName();
+
+      // Check if the account ID is already in the sheet.
+      if (accountIdsInSheet.indexOf(accountId) === -1) {
+        // Find the first empty row after row 6 and add the account ID and name.
+        var emptyRow = settingsSheet.getRange('A7:A').getValues().findIndex(row => !row[0]) + 7;
+        settingsSheet.getRange('A' + emptyRow).setValue(accountId);
+        settingsSheet.getRange('B' + emptyRow).setValue(accountName);
+        settingsSheet.getRange('K' + emptyRow).setValue(100);
+        settingsSheet.getRange('M' + emptyRow).setValue(20);
+        settingsSheet.getRange('W' + emptyRow).setValue(1);
+        
+        var columns = ['C', 'D', 'E', 'F', 'G', 'J', 'L', 'N', 'P', 'V', 'X'];
+        for (var i = 0; i < columns.length; i++) {
+          settingsSheet.getRange(columns[i] + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+            .setAllowInvalid(false)
+            .requireValueInList(['Hourly', 'Daily', 'Weekly', 'Monthly', 'Never'], true)
+            .build());
+          if(columns[i] === 'L' || columns[i] === 'N' || columns[i] === 'V'){
+            settingsSheet.getRange(columns[i] + emptyRow).setValue('Daily');
+          } else if (columns[i] === 'P') {
+            settingsSheet.getRange(columns[i] + emptyRow).setValue('Never');
+          }else if (columns[i] === 'X') {
+            settingsSheet.getRange(columns[i] + emptyRow).setValue('Monthly');
+          } else {
+            settingsSheet.getRange(columns[i] + emptyRow).setValue('Hourly');
+          }
+        }
+
+        settingsSheet.getRange('O' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+          .setAllowInvalid(true)
+          .requireCheckbox()
+          .build());        
+        settingsSheet.getRange('R' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+          .setAllowInvalid(true)
+          .requireCheckbox()
+          .build());
+        settingsSheet.getRange('S' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+          .setAllowInvalid(true)
+          .requireCheckbox()
+          .build());
+        
+      }
+    }
+  }
+
+//----------------------------- END CHECK ACCOUNT -----------------------------   
+
+  
+//----------------------------- START OTHER FUNCTIONS -----------------------------  
+  function getDayOfWeek() {
+    // Get day of the week like "Monday"
+    var date = new Date();
+    var options = { timeZone: 'Europe/Amsterdam', weekday: 'long' };
+    var dayOfWeek = new Intl.DateTimeFormat('en-US', options).format(date);
+    return dayOfWeek;
+  }
+  
+  function getFormatedDate(days, notation, timeZone) {
+    var currentDate = new Date();
+
+    var tempDate = new Date(); 
+    tempDate.setDate(tempDate.getDate()- days);
+
+    var yesterdayDate = tempDate;
+    return Utilities.formatDate(tempDate, timeZone,notation );
+  }
+  
+  function getHour() {
+    // Get the current date and time in the Amsterdam timezone
+    var amsterdamTimeZone = AdsApp.currentAccount().getTimeZone();
+    var amsterdamDate = Utilities.formatDate(new Date(), amsterdamTimeZone, 'yyyy-MM-dd HH:mm:ss');
+
+    // Extract the hour in 24-hour notation from the Amsterdam date and time
+    var amsterdamHour = Number(amsterdamDate.split(' ')[1].split(':')[0]);
+
+    // Log the hour in 24-hour notation for the Amsterdam timezone
+    return amsterdamHour;
+  }
+  
+  function isTodayFirstDayOfMonth() {
+    // Get the current date and time in the Amsterdam timezone
+    var amsterdamTimeZone = AdsApp.currentAccount().getTimeZone();
+    var amsterdamDate = Utilities.formatDate(new Date(), amsterdamTimeZone, 'dd');
+
+    // Check if the current day is 01 (indicating the first day of the month)
+    if (amsterdamDate === '01') {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  function clearLogs(frequency){
+    var settingsSheet = spreadsheet.getSheetByName('Settings');
+
+    // Get all account names from column B starting at row 7.
+    var accountNames = settingsSheet.getRange('B7:B').getValues().flat().filter(Boolean);
+    
+    for (var i = 0; i < accountNames.length; i++) {
+      var sheetName = accountNames[i];
+      var sheet = spreadsheet.getSheetByName(sheetName);
+      if (sheet) {
+        var lastRow = sheet.getLastRow();
+        for (var row = lastRow; row > 0; row--) {
+          var currentFrequency = sheet.getRange(row, 2).getValue();
+          if (currentFrequency == frequency) {
+            sheet.deleteRow(row);
+          }
+        }
+      }
+    }
+    
+    var logsSheetName = frequency + 'Log';
+    var logsSheet = spreadsheet.getSheetByName(logsSheetName);
+    if (logsSheet) {
+      var logsLastRow = logsSheet.getLastRow();
+      logsSheet.getRange("A2:C" + logsLastRow).clearContent();
+      /*for (var logsRow = logsLastRow; logsRow >= 2; logsRow--) {
+        logsSheet.deleteRow(logsRow);
+        Logger.log(logsSheetName + " has been clear from row 2 untill row " + logsLastRow);
+      }*/
+    }
+  }
+  
+  function clearLinkLogs (){
+    var checkedLinksSheet = spreadsheet.getSheetByName('checkedLinks');
+    var brokenLinksSheet = spreadsheet.getSheetByName('brokenLinks');
+
+    // Determine if there is content to clear
+    var lastRow = checkedLinksSheet.getLastRow();
+    if (lastRow > 1) { // There is something to clear
+      checkedLinksSheet.getRange("A2:B" + lastRow).clearContent();
+    }
+
+    // Determine if there is content to clear
+    var lastRow = brokenLinksSheet.getLastRow();
+    if (lastRow > 1) { // There is something to clear
+      brokenLinksSheet.getRange("A2:D" + lastRow).clearContent();
+    }
+  }
+    
+  function sendEmail(mailadres) {
+    var mainMailBodySheet = spreadsheet.getSheetByName("MailBody");
+    
+    // List of MailBody sheets to process
+    var mailBodySheets = ["MailBody1", "MailBody2", "MailBody3", "MailBody4", "MailBody5"];
+
+    mailBodySheets.forEach(function(sheetName) {
+      var sourceSheet = spreadsheet.getSheetByName(sheetName);
+
+      if (sourceSheet) {
+        // Determine if there is content to copy
+        var lastRow = sourceSheet.getLastRow();
+        if (lastRow > 1) { // There is something to copy
+          var rangeToCopy = sourceSheet.getRange("A2:F" + lastRow).getValues();
+
+          // Find the first empty row in the destination sheet
+          var firstEmptyRow = mainMailBodySheet.getLastRow() + 1; // Assumes there's always content above
+
+          // Paste the values into the destination sheet
+          mainMailBodySheet.getRange(firstEmptyRow, 1, rangeToCopy.length, rangeToCopy[0].length).setValues(rangeToCopy);
+
+          // Clear the source sheet starting at row 2
+          sourceSheet.getRange("A2:F" + lastRow).clearContent();
+        }
+      }
+    });
+    
+    
+    
+    var mailBodyData = mainMailBodySheet.getDataRange().getValues();
+    var headerRow = mailBodyData[0];
+    var tableRows = [];
+
+    // Iterate through the rows starting from the second row (index 1)
+    for (var i = 1; i < mailBodyData.length; i++) {
+      var rowData = mailBodyData[i];
+      var isNonEmpty = rowData.slice(0, 6).some(function(cell) {
+        return cell !== "";
+      });
+
+     // Check if the row is non-empty
+      if (isNonEmpty) {
+        // Set background color of the second column to show urgency
+        var bgColor2 = "";
+        if (rowData[1] === "Account down") {
+          bgColor2 = "#EA4335";
+        } else if (rowData[1] === "Budget monitoring error") {
+          bgColor2 = "#EA4335";
+        } else if (rowData[1] === "Budget monitoring") {
+          bgColor2 = "#EA9C32";
+        }
+
+        // Set background color of the sixth column based on its content
+        var bgColor6 = "";
+        if (rowData[5].includes("Too conservative")) {
+          bgColor6 = "#EA9C32";
+        } else if (rowData[5].includes("Well-managed")) {
+          bgColor6 = "#83d741";
+        } else if (rowData[5].includes("Too aggressive")) {
+          bgColor6 = "#EA9C32";
+        } else if (rowData[5].includes("Mismanaged")) {
+          bgColor6 = "#EA4335";
+        }
+
+        // Build the table row with background colors for the 2nd and 6th columns
+        var tableRow = rowData.slice(0, 6).map(function(cell, index) {
+          if (index === 1) {
+            return `<td style="background-color:${bgColor2}">${cell}</td>`;
+          } else if (index === 5) {
+            return `<td style="background-color:${bgColor6}">${cell}</td>`;
+          } else {
+            return `<td>${cell}</td>`;
+          }
+        }).join("");
+        tableRows.push(`<tr>${tableRow}</tr>`);
+      }
+    }
+
+    // Check if there are rows to send
+    if (tableRows.length > 0) {
+      // Compose the HTML email with the table
+      var emailBody = `
+        <p>Please see the following issues:</p>
+        <style>
+          .my-class  {
+            overflow: auto;
+            width: 100%;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .my-class table {
+            border: 1px solid #DEDEDF;
+            height: 100%;
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            border-spacing: 1px;
+            text-align: left;
+          }
+          .my-class caption {
+            caption-side: top;
+            text-align: left;
+          }
+          .my-class th {
+            border: 1px solid #DEDEDF;
+            background-color: #ECEFF1;
+            color: #000000;
+            padding: 5px;
+          }
+          .my-class td {
+            border: 1px solid #DEDEDF;
+            background-color: #FFFFFF;
+            color: #000000;
+            padding: 5px;
+          }
+        </style>
+        <div class="my-class" role="region" tabindex="0">
+        
+        <table>
+          <tr>${headerRow.slice(0, 6).map(cell => `<th>${cell}</th>`).join("")}</tr>
+          ${tableRows.join("")}
+        </table></div>
+        <span>Check your settings <a href="` + shortUrl + `">in this sheet</a>`;
+
+      // SMTP2GO API endpoint and API key
+      var apiUrl = "https://api.smtp2go.com/v3/email/send";
+      var apiKey = "api-32DD391F78F2418F94B140166A6C8332";
+
+      // Email data
+      var emailData = {
+        api_key: apiKey,
+        sender: "ga@netprofiler.nl",
+        to: mailadres,
+        subject: "AdHealth alerts",
+        html_body: emailBody,
+      };
+      
+      // Create the options for the API request
+      var options = {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          Authorization: "Bearer " + apiKey,
+        },
+        payload: JSON.stringify(emailData),
+      };
+
+      // Send the email using the SMTP2GO API
+      var response = UrlFetchApp.fetch(apiUrl, options);
+
+      // Log the response (you can check for success or handle errors here)
+      Logger.log(response.getContentText());
+    
+      /*
+      // Send the email
+      MailApp.sendEmail({
+        to: mailadres,
+        subject: frequency + " issues found",
+        htmlBody: emailBody,
+      });
+      */
+      Logger.log('Email sent with the list of issues.');
+      
+      // Open the log sheet
+      var logSpreadsheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1lfGUi41SSZemcxMdhkchwe8ocTo77xDiaUYrlHn7EiQ/edit#gid=0");
+      var logSheet = logSpreadsheet.getSheetByName('log');
+
+      // Check if there is data beyond the header
+      if (mailBodyData.length > 1) {
+        // Remove the header row
+        mailBodyData.shift();
+
+        // Add current date and account label to each row
+        var currentDate = new Date();
+        mailBodyData.forEach(function(row) {
+          row.push(currentDate, accountLabel);
+        });
+
+        // Get the next empty row in the log sheet
+        var nextRow = logSheet.getLastRow() + 1;
+
+        // Set the values in the log sheet
+        var range = logSheet.getRange(nextRow, 1, mailBodyData.length, mailBodyData[0].length);
+        range.setValues(mailBodyData);
+      }
+      
+      // Clear all rows except the first one
+      try{
+        var lastRow = mainMailBodySheet.getLastRow();
+        mainMailBodySheet.getRange("A2:F" + lastRow).clearContent();
+      }
+      catch(err) {
+        Logger.log("Nothing to remove")
+      }
+    }
+  }
+  
+  function logAccounts(today) {
+    Logger.log("Log account");
+    var logSpreadsheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1lfGUi41SSZemcxMdhkchwe8ocTo77xDiaUYrlHn7EiQ/edit#gid=0");
+    var accountLogsSheet = logSpreadsheet.getSheetByName('accountLogs');
+    
+    // Reading account names from the 'Settings' sheet
+    var accountNamesRange = settingsSheet.getRange('B7:B'); // Assuming there's no defined end row
+    var accountNames = accountNamesRange.getValues();
+
+    // Preparing data to write in 'accountLogs' sheet
+    var dataToWrite = [];
+    for (var i = 0; i < accountNames.length; i++) {
+        if (accountNames[i][0] != '') { // Only consider non-empty cells
+            dataToWrite.push([accountNames[i][0], accountLabel, today]);
+        }
+    }
+
+    // Finding the last row with data in 'accountLogs' sheet
+    var lastRow = accountLogsSheet.getLastRow();
+
+    // Writing data to new rows in 'accountLogs' sheet
+    if (dataToWrite.length > 0) {
+        accountLogsSheet.getRange(lastRow + 1, 1, dataToWrite.length, 3).setValues(dataToWrite);
+    }
+  }
+  
+  // Function to check if 45 minutes have passed since the start time
+  function has45MinutesPassed() {
+    // Get the current time
+    var currentTime = new Date();
+
+    // Calculate the time difference in milliseconds
+    var timeDifference = currentTime - startTime;
+
+    // Convert milliseconds to minutes
+    var minutesPassed = timeDifference / (1000 * 60);
+
+    // Check if 45 minutes have passed
+    return minutesPassed >= 45;
+  }
+  
+  function addAccountName(accountName) {
+  
+    // Access the specific sheet within the spreadsheet. Adjust the sheet name if necessary.
+    var AccountLogSheet = spreadsheet.getSheetByName("accountLog");
+
+    // Get all the values in column A. Adjust the range if your column A data starts or ends in different rows.
+    var columnA = AccountLogSheet.getRange('A:A').getValues();
+
+    // Flatten the array for easier searching.
+    var flatColumnA = columnA.flat();
+
+    // Check if accountName is in column A.
+    if (flatColumnA.indexOf(accountName) === -1) {
+      // Find the first empty row in column A. We add 1 because arrays are 0-indexed but Sheets rows are 1-indexed.
+      var firstEmptyRowIndex = flatColumnA.findIndex(function (value) { return value == ""; }) + 1;
+
+      // If there's no empty row found, set the row index to the row after the last row with data in column A.
+      if (firstEmptyRowIndex === 0) {
+        firstEmptyRowIndex = flatColumnA.length + 1;
+      }
+
+      // Add the accountName to the first empty row in column A.
+      AccountLogSheet.getRange('A' + firstEmptyRowIndex).setValue(accountName);
+      AccountLogSheet.getRange('B' + firstEmptyRowIndex).setValue('Main script');
+      Logger.log('Account name added to row: ' + firstEmptyRowIndex);
+    }
+  }
+  
+  function clearPacing() {
+    var lastRow = settingsSheet.getLastRow();
+    settingsSheet.getRange(7, 20, lastRow - 1, 2).clearContent();
+  }
+  
+  function sendBudget() {
+    var lastRow = settingsSheet.getLastRow();
+
+    // Assuming account names start from row 7 and budgets are in column Q
+    Logger.log("Send budgets to be checked")
+    var accountNames = settingsSheet.getRange('B7:B' + lastRow).getValues();
+    var budgets = settingsSheet.getRange('Q7:Q' + lastRow).getValues();
+
+    for (let i = 0; i < accountNames.length; i++) {
+      var accountName = accountNames[i][0];
+      var budget = budgets[i][0];
+
+      if (budget) {
+        mailbodySheet.appendRow([accountName, "Budget update", "", "", " ", "The monthly budget for this account is set to €" + budget + ". Please check if this is still correct."]);
+      }
+    }
+  }
+  
+//----------------------------- END OTHER FUNCTIONS -----------------------------  
+
+}
