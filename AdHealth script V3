@@ -118,7 +118,9 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var shortUrl = spreadsheetUrl;
   }
   Logger.log(shortUrl)
-  Logger.log(!newSetup && mailadres.length > 0 && accountLabel.length > 0)
+  Logger.log(!newSetup)
+  Logger.logm(mailadres.length)
+  Logger.log(accountLabel.length)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
     checkAccount();
