@@ -119,7 +119,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
   Logger.log(shortUrl)
   Logger.log(!newSetup)
-  Logger.logm(mailadres.length)
+  Logger.log(mailadres.length)
   Logger.log(accountLabel.length)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
