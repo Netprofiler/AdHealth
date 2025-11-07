@@ -186,14 +186,14 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var accountNames = settingsSheet.getRange('B3:B').getValues().flat().filter(Boolean);
     
     // Get all check names from row 6.
-    var checkNames = settingsSheet.getRange('C2:X2').getValues()[0];
+    var checkNames = settingsSheet.getRange('E2:Z2').getValues()[0];
 
     // Add Merchant Center ID check and Disapproved products to the checkNames
     checkNames.push('Merchant Center ID check');
     checkNames.push('Disapproved products');
     
     // Get all check frequencies for each account.
-    var checkFrequencies = settingsSheet.getRange('E3:X').getValues();
+    var checkFrequencies = settingsSheet.getRange('E3:Z').getValues();
 
     // Iterate over each account and do checks.
     for (var i = 0; i < accountIds.length; i++) {
