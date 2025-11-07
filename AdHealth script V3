@@ -118,9 +118,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var shortUrl = spreadsheetUrl;
   }
   Logger.log(shortUrl)
-  Logger.log(!newSetup)
-  Logger.log(mailadres.length)
-  Logger.log(accountLabel.length)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
     checkAccount();
@@ -200,10 +197,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
     // Iterate over each account and do checks.
     for (var i = 0; i < accountIds.length; i++) {
+      var rowNumber = i + 3;
+      var columnCorrection = 5;
       var accountId = accountIds[i];
       var accountname = accountNames[i];
-      var clientConsultants = settingsSheet.getRange(i + 3, 3).getValue();
-      var emailWhitelist = settingsSheet.getRange(i + 3, 4).getValue().toLowerCase();
+      var clientConsultants = settingsSheet.getRange(rowNumber, 3).getValue();
+      var emailWhitelist = settingsSheet.getRange(rowNumber, 4).getValue().toLowerCase();
 
       // Controleer of dit account bij deze consultant hoort
       if (clientConsultants.indexOf(consultantName) === -1) {
@@ -233,10 +232,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               var frequency = "Daily";
               break;
             case 'Monthly budget':
-              var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + 3;
-              var budgetMonitorFrequecy = settingsSheet.getRange(i + 3, positionBudgetFrequecy).getValue();
-              var positionBudget = checkNames.indexOf('Monthly budget') + 3;
-              var budgetMonitor = settingsSheet.getRange(i + 3, positionBudget).getValue();
+              var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + columnCorrection;
+              var budgetMonitorFrequecy = settingsSheet.getRange(rowNumber, positionBudgetFrequecy).getValue();
+              var positionBudget = checkNames.indexOf('Monthly budget') + columnCorrection;
+              var budgetMonitor = settingsSheet.getRange(rowNumber, positionBudget).getValue();
               if(budgetMonitor && budgetMonitorFrequecy === "Never") {
                 var frequency = "Daily";
               }
@@ -279,23 +278,23 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               }
               break;
             case 'Target ROAS check':
-              var positionMinTROAS = checkNames.indexOf('Minimum target ROAS amount') + 3;
-              var minTRoas = settingsSheet.getRange(i + 3, positionMinTROAS).getValue();
+              var positionMinTROAS = checkNames.indexOf('Minimum target ROAS amount') + columnCorrection;
+              var minTRoas = settingsSheet.getRange(rowNumber, positionMinTROAS).getValue();
               tROASCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, minTRoas);
               break;
             case 'Active ad or keyword':
               activeAdOrKeyword(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'Search term CPC check':
-              var positionMaxSearchTermCpc = checkNames.indexOf('Search term CPC amount') + 3;
-              var maxSearchTermCpc = settingsSheet.getRange(i + 3, positionMaxSearchTermCpc).getValue();
+              var positionMaxSearchTermCpc = checkNames.indexOf('Search term CPC amount') + columnCorrection;
+              var maxSearchTermCpc = settingsSheet.getRange(rowNumber, positionMaxSearchTermCpc).getValue();
               maxSearchTermCpcCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, maxSearchTermCpc);
               break;
             case 'Disapproved products':
-              var merchantCenterIdPosition = checkNames.indexOf('Merchant Center ID') + 3;
-              var merchantCenterId = settingsSheet.getRange(i + 3, merchantCenterIdPosition).getValue();
-              var productThresholdPosition = checkNames.indexOf('Acceptable % of disapproved products') + 3;
-              var productThreshold = settingsSheet.getRange(i + 3, productThresholdPosition).getValue();
+              var merchantCenterIdPosition = checkNames.indexOf('Merchant Center ID') + columnCorrection;
+              var merchantCenterId = settingsSheet.getRange(rowNumber, merchantCenterIdPosition).getValue();
+              var productThresholdPosition = checkNames.indexOf('Acceptable % of disapproved products') + columnCorrection;
+              var productThreshold = settingsSheet.getRange(rowNumber, productThresholdPosition).getValue();
               if(merchantCenterId && productThreshold) {
                 try {
                   disapprovedProducts(frequency, accountNames[i], logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold);
@@ -306,27 +305,27 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               }
               break;
             case 'Budget monitoring':
-              var budgetPosition = checkNames.indexOf('Monthly budget') + 3;
-              var accountBudget = settingsSheet.getRange(i + 3, budgetPosition).getValue();
-              var campaignTypePosition = checkNames.indexOf('Only Shopping/ Pmax/Search') + 3;
-              var campaignType = settingsSheet.getRange(i + 3, campaignTypePosition).getValue();
-              var limitTypePosition = checkNames.indexOf('Upper limit only') + 3;
-              var limitType = settingsSheet.getRange(i + 3, limitTypePosition).getValue();
+              var budgetPosition = checkNames.indexOf('Monthly budget') + columnCorrection;
+              var accountBudget = settingsSheet.getRange(rowNumber, budgetPosition).getValue();
+              var campaignTypePosition = checkNames.indexOf('Only Shopping/ Pmax/Search') + columnCorrection;
+              var campaignType = settingsSheet.getRange(rowNumber, campaignTypePosition).getValue();
+              var limitTypePosition = checkNames.indexOf('Upper limit only') + columnCorrection;
+              var limitType = settingsSheet.getRange(rowNumber, limitTypePosition).getValue();
               budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, i, limitType);
               break;
             case 'Conversion recency check':
-              var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + 3;
-              var daysToCheck = settingsSheet.getRange(i + 3, daysToCheckPosition).getValue();
+              var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + columnCorrection;
+              var daysToCheck = settingsSheet.getRange(rowNumber, daysToCheckPosition).getValue();
               daysSinceLastConversion(frequency, accountNames[i], logSheet, mailbodySheet, accountId, daysToCheck);
               break; 
             case 'Lin Rodnitzky Ratio':
               linRodnitzkyRatio(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
               break;
             case 'Merchant Center ID check':
-              var positionMerchantCenterId = checkNames.indexOf('Merchant Center ID') + 3;
-              var MerchantCenterId = settingsSheet.getRange(i + 3, positionMerchantCenterId).getValue();
+              var positionMerchantCenterId = checkNames.indexOf('Merchant Center ID') + columnCorrection;
+              var MerchantCenterId = settingsSheet.getRange(rowNumber, positionMerchantCenterId).getValue();
               if(!MerchantCenterId){
-                merchantCenterIdCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, i + 3, positionMerchantCenterId);
+                merchantCenterIdCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, rowNumber, positionMerchantCenterId);
               }
               break;
           }
@@ -1617,12 +1616,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var getDaysInCurrentMonth = getDaysInCurrentMonth();
       
       // get column and set day pacing 
-      var dayPacingPosition = checkNames.indexOf('Day pacing') + 3;
+      var dayPacingPosition = checkNames.indexOf('Day pacing') + columnCorrection;
       var dayPacing = dayOfMonth / getDaysInCurrentMonth;
       settingsSheet.getRange(accountRow + 7, dayPacingPosition).setValue(dayPacing);
       
       // get column and set spend pacing 
-      var spendPacingPosition = checkNames.indexOf('Spend pacing') + 3;
+      var spendPacingPosition = checkNames.indexOf('Spend pacing') + columnCorrection;
       var spendPacing = spendMtD / accountBudget;
       settingsSheet.getRange(accountRow + 7, spendPacingPosition).setValue(spendPacing);
       
