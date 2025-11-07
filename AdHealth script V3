@@ -250,8 +250,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           var logData = logData.getValues();
           var alreadyRun = logData.some(row => row[0] === checkName && row[1] === accountId);
         }
-
-        Logger.log(alreadyRun)
+        Logger.log(ccheckNames)
+        Logger.log(checkFrequencies)
         Logger.log(frequency)
         Logger.log(checkFrequency)
 
