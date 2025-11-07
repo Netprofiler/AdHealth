@@ -1,9 +1,12 @@
-function adHealthCheck(spreadsheetUrl) {
+function adHealthCheck(spreadsheetUrl, consultantName) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 1.16.2")
+  Logger.log("Good job, you're using the latest version: 2.0.0")
 
   /**
  * Changelog - Script Updates
+ *
+ *  Version v2.0.0 – 2025-11-07
+ * - Merge multi-consultant sheets into one company sheet
  *
  *  Version v1.16.2 – 2025-09-23
  * - Support multiple email addresses separated by comma
@@ -77,19 +80,36 @@ function adHealthCheck(spreadsheetUrl) {
      
   // Get variables
   var settingsSheet = spreadsheet.getSheetByName('Settings');
-  var mailbodySheet = spreadsheet.getSheetByName("MailBody");
+  var labelsSheet = spreadsheet.getSheetByName('Labels');
+  var mailbodySheet = setupMailBodySheet(consultantName);
   var timezone = "Europe/Amsterdam";
   var todayString = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd');
   var weekDay = getDayOfWeek();
   var hour = getHour();
   var firstDayOfTheMonth = isTodayFirstDayOfMonth();
-  var accountLabel = settingsSheet.getRange('B3').getValue();
-  var mailadresRaw = settingsSheet.getRange('B4').getValue();
-  var mailadres = mailadresRaw.split(",");
+  //var accountLabel = settingsSheet.getRange('B3').getValue();
+  //var mailadresRaw = settingsSheet.getRange('B4').getValue();
+  //var mailadres = mailadresRaw.split(",");
   var startTime = new Date();
-  var dsaNaming = settingsSheet.getRange('J3').getValue();
-  var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
+  //var dsaNaming = settingsSheet.getRange('J3').getValue();
+  //var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
   
+  //Get right account label and emailaddress
+  var lastRow = labelsSheet.getLastRow();
+  var data = labelsSheet.getRange(2, 1, lastRow - 1, 3).getValues(); // A2:C
+
+  for (var i = 0; i < data.length; i++) {
+    var rowName = data[i][0]; // kolom A
+    var rowLabel = data[i][1]; // kolom B
+    var rowMail = data[i][2];  // kolom C
+
+    if (rowName === consultantName) {
+      accountLabel = rowLabel;
+      mailadres = rowMail;
+      break;
+    }
+  }
+
   if(weekDay == "Monday" && hour == 23){
     logAccounts(today);
   }
@@ -161,26 +181,36 @@ function adHealthCheck(spreadsheetUrl) {
     Logger.log(checkFrequency)
     var settingsSheet = spreadsheet.getSheetByName('Settings');
 
-    // Get all account IDs from column A starting at row 7.
-    var accountIds = settingsSheet.getRange('A7:A').getValues().flat().filter(Boolean);
+    // Get all account IDs from column A starting at row 3.
+    var accountIds = settingsSheet.getRange('A3:A').getValues().flat().filter(Boolean);
 
-    // Get all account names from column B starting at row 7.
-    var accountNames = settingsSheet.getRange('B7:B').getValues().flat().filter(Boolean);
+    // Get all account names from column B starting at row 3.
+    var accountNames = settingsSheet.getRange('B3:B').getValues().flat().filter(Boolean);
     
     // Get all check names from row 6.
-    var checkNames = settingsSheet.getRange('C6:X6').getValues()[0];
+    var checkNames = settingsSheet.getRange('C2:X2').getValues()[0];
 
     // Add Merchant Center ID check and Disapproved products to the checkNames
     checkNames.push('Merchant Center ID check');
     checkNames.push('Disapproved products');
     
     // Get all check frequencies for each account.
-    var checkFrequencies = settingsSheet.getRange('C7:X').getValues();
+    var checkFrequencies = settingsSheet.getRange('E3:X').getValues();
 
     // Iterate over each account and do checks.
     for (var i = 0; i < accountIds.length; i++) {
       var accountId = accountIds[i];
       var accountname = accountNames[i];
+      var clientConsultants = settingsSheet.getRange(i + 3, 3).getValue();
+      var emailWhitelist = settingsSheet.getRange(i + 3, 4).getValue().toLowerCase();
+
+      // Controleer of dit account bij deze consultant hoort
+      if (clientConsultants.indexOf(consultantName) === -1) {
+        Logger.log("Consultant " + consultantName + " is niet aan dit account gekoppeld.");
+        continue;
+      }
+
+
       Logger.log(checkFrequency + " -- " + accountname)
       for (var j = 0; j < checkNames.length; j++) {
         var timeOut = has45MinutesPassed();
@@ -198,9 +228,21 @@ function adHealthCheck(spreadsheetUrl) {
             case 'Merchant Center ID check':
               var frequency = "Daily";
               break;
+            case 'Monthly budget':
+              var frequency = "Daily";
+              break;
+            case 'Monthly budget':
+              var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + 3;
+              var budgetMonitorFrequecy = settingsSheet.getRange(i + 3, positionBudgetFrequecy).getValue();
+              var positionBudget = checkNames.indexOf('Monthly budget') + 3;
+              var budgetMonitor = settingsSheet.getRange(i + 3, positionBudget).getValue();
+              if(budgetMonitor && budgetMonitorFrequecy === "Never") {
+                var frequency = "Daily";
+              }
+              break;
         }
 
-        var logSheet = spreadsheet.getSheetByName(frequency + 'Log');
+        var logSheet = getOrCreateLogSheet(frequency, consultantName)
         
         // Check if the script for this account ID has already run in the period. -----------------------------------------------------------------
         if (frequency === checkFrequency) {
@@ -237,7 +279,7 @@ function adHealthCheck(spreadsheetUrl) {
               break;
             case 'Target ROAS check':
               var positionMinTROAS = checkNames.indexOf('Minimum target ROAS amount') + 3;
-              var minTRoas = settingsSheet.getRange(i + 7, positionMinTROAS).getValue();
+              var minTRoas = settingsSheet.getRange(i + 3, positionMinTROAS).getValue();
               tROASCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, minTRoas);
               break;
             case 'Active ad or keyword':
@@ -245,14 +287,14 @@ function adHealthCheck(spreadsheetUrl) {
               break;
             case 'Search term CPC check':
               var positionMaxSearchTermCpc = checkNames.indexOf('Search term CPC amount') + 3;
-              var maxSearchTermCpc = settingsSheet.getRange(i + 7, positionMaxSearchTermCpc).getValue();
+              var maxSearchTermCpc = settingsSheet.getRange(i + 3, positionMaxSearchTermCpc).getValue();
               maxSearchTermCpcCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, maxSearchTermCpc);
               break;
             case 'Disapproved products':
               var merchantCenterIdPosition = checkNames.indexOf('Merchant Center ID') + 3;
-              var merchantCenterId = settingsSheet.getRange(i + 7, merchantCenterIdPosition).getValue();
+              var merchantCenterId = settingsSheet.getRange(i + 3, merchantCenterIdPosition).getValue();
               var productThresholdPosition = checkNames.indexOf('Acceptable % of disapproved products') + 3;
-              var productThreshold = settingsSheet.getRange(i + 7, productThresholdPosition).getValue();
+              var productThreshold = settingsSheet.getRange(i + 3, productThresholdPosition).getValue();
               if(merchantCenterId && productThreshold) {
                 try {
                   disapprovedProducts(frequency, accountNames[i], logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold);
@@ -264,16 +306,16 @@ function adHealthCheck(spreadsheetUrl) {
               break;
             case 'Budget monitoring':
               var budgetPosition = checkNames.indexOf('Monthly budget') + 3;
-              var accountBudget = settingsSheet.getRange(i + 7, budgetPosition).getValue();
+              var accountBudget = settingsSheet.getRange(i + 3, budgetPosition).getValue();
               var campaignTypePosition = checkNames.indexOf('Only Shopping/ Pmax/Search') + 3;
-              var campaignType = settingsSheet.getRange(i + 7, campaignTypePosition).getValue();
+              var campaignType = settingsSheet.getRange(i + 3, campaignTypePosition).getValue();
               var limitTypePosition = checkNames.indexOf('Upper limit only') + 3;
-              var limitType = settingsSheet.getRange(i + 7, limitTypePosition).getValue();
+              var limitType = settingsSheet.getRange(i + 3, limitTypePosition).getValue();
               budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, i, limitType);
               break;
             case 'Conversion recency check':
               var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + 3;
-              var daysToCheck = settingsSheet.getRange(i + 7, daysToCheckPosition).getValue();
+              var daysToCheck = settingsSheet.getRange(i + 3, daysToCheckPosition).getValue();
               daysSinceLastConversion(frequency, accountNames[i], logSheet, mailbodySheet, accountId, daysToCheck);
               break; 
             case 'Lin Rodnitzky Ratio':
@@ -281,9 +323,9 @@ function adHealthCheck(spreadsheetUrl) {
               break;
             case 'Merchant Center ID check':
               var positionMerchantCenterId = checkNames.indexOf('Merchant Center ID') + 3;
-              var MerchantCenterId = settingsSheet.getRange(i + 7, positionMerchantCenterId).getValue();
+              var MerchantCenterId = settingsSheet.getRange(i + 3, positionMerchantCenterId).getValue();
               if(!MerchantCenterId){
-                merchantCenterIdCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, i + 7, positionMerchantCenterId);
+                merchantCenterIdCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, i + 3, positionMerchantCenterId);
               }
               break;
           }
@@ -2633,6 +2675,38 @@ function adHealthCheck(spreadsheetUrl) {
       }
     }
   }
+
+  function setupMailBodySheet(consultantName) {
+    var sheetName = "MailBody" + consultantName;
+
+    // Controleer of de sheet bestaat
+    var mailbodySheet = spreadsheet.getSheetByName(sheetName);
+    if (!mailbodySheet) {
+      // Sheet bestaat niet, maak aan
+      mailbodySheet = spreadsheet.insertSheet(sheetName);
+
+      // Voeg kolomkoppen toe
+      var headers = ["Account name", "Check", "Campaign", "Ad group", "Search Term", "Issue"];
+      mailbodySheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+      // Eventueel opmaak toevoegen
+      mailbodySheet.getRange("A1:F1").setFontWeight("bold");
+      mailbodySheet.setFrozenRows(1);
+    }
+
+    // Nu is mailbodySheet gegarandeerd aanwezig
+    Logger.log("MailBody sheet is klaar: " + sheetName);
+
+    return mailbodySheet;
+  }
+
+function getOrCreateLogSheet(frequency, consultantName) {
+  var name = frequency + 'Log' + consultantName;
+  var sheet = spreadsheet.getSheetByName(name) || spreadsheet.insertSheet(name);
+  if (sheet.getLastRow() === 0) sheet.appendRow(['Script', 'Account ID', 'Date']);
+  return sheet;
+}
+
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
 
