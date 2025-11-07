@@ -202,7 +202,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var accountId = accountIds[i];
       var accountname = accountNames[i];
       var clientConsultants = settingsSheet.getRange(rowNumber, 3).getValue();
-      var emailWhitelist = settingsSheet.getRange(rowNumber, 4).getValue().toLowerCase();
+      var emailWhitelistInput = settingsSheet.getRange(rowNumber, 4).getValue().toLowerCase();
+      var emailWhitelist = emailWhitelistInput + ",netprofiler.nl,leadscope.nl,clickvalue.nl,channable.com";
 
       // Controleer of dit account bij deze consultant hoort
       if (clientConsultants.indexOf(consultantName) === -1) {
