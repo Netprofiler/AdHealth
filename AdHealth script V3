@@ -6,10 +6,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
  * Changelog - Script Updates
  *
  *  Version v2.0.0 – 2025-11-07
- * - Merge multi-consultant sheets into one company sheet.
+ * - Merge multi-consultant sheets into one company sheet
  *
  *  Version v1.16.2 – 2025-09-23
- * - Support multiple email addresses separated by comma.
+ * - Support multiple email addresses separated by comma
  * 
  *  Version v1.16.1 – 2025-07-30
  * - Run daily check first. Add end of run comment.
@@ -169,6 +169,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
 
     Logger.log("All checks were finished for this round.")
+
+  }
   
 //----------------------------- START ALL CHECKS -----------------------------
 // Hourly check have the highest priority. They will be done first. 
