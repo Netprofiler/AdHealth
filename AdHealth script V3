@@ -242,7 +242,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               break;
         }
 
-        var logSheet = getOrCreateLogSheet(frequency, consultantName)
+        var logSheet = getOrCreateLogSheet(checkFrequency, consultantName)
         
         // Check if the script for this account ID has already run in the period. -----------------------------------------------------------------
         if (frequency === checkFrequency) {
