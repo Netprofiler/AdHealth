@@ -118,7 +118,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var shortUrl = spreadsheetUrl;
   }
   Logger.log(shortUrl)
-  
+  Logger.log(!newSetup && mailadres.length > 0 && accountLabel.length > 0)
+
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
     checkAccount();
     
@@ -2691,10 +2692,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       mailbodySheet.getRange("A1:F1").setFontWeight("bold");
       mailbodySheet.setFrozenRows(1);
     }
-
-    // Nu is mailbodySheet gegarandeerd aanwezig
-    Logger.log("MailBody sheet is klaar: " + sheetName);
-
     return mailbodySheet;
   }
 
