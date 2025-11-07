@@ -169,10 +169,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
 
     Logger.log("All checks were finished for this round.")
-
-  } else if (mailadres.length == 0 || accountLabel.length == 0){
-    Logger.log("Mailaddress and/or account label not provided");
-  }
   
 //----------------------------- START ALL CHECKS -----------------------------
 // Hourly check have the highest priority. They will be done first. 
