@@ -207,7 +207,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
       // Controleer of dit account bij deze consultant hoort
       if (clientConsultants.indexOf(consultantName) === -1) {
-        Logger.log("Consultant " + consultantName + " is niet aan dit account gekoppeld.");
+        Logger.log(checkFrequency + " -- " & accountname & " -- Consultant " + consultantName + " is niet aan dit account gekoppeld.");
         continue;
       }
 
