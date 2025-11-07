@@ -1620,12 +1620,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var getDaysInCurrentMonth = getDaysInCurrentMonth();
       
       // get column and set day pacing 
-      var dayPacingPosition = checkNames.indexOf('Day pacing') + columnCorrection;
+      var dayPacingPosition = checkNames.indexOf('Day pacing') + 5;
       var dayPacing = dayOfMonth / getDaysInCurrentMonth;
       settingsSheet.getRange(accountRow + 7, dayPacingPosition).setValue(dayPacing);
       
       // get column and set spend pacing 
-      var spendPacingPosition = checkNames.indexOf('Spend pacing') + columnCorrection;
+      var spendPacingPosition = checkNames.indexOf('Spend pacing') + 5;
       var spendPacing = spendMtD / accountBudget;
       settingsSheet.getRange(accountRow + 7, spendPacingPosition).setValue(spendPacing);
       
