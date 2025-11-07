@@ -260,7 +260,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
                 break;
               }
             case 'Unknown user made a change':
-              changeHistoryCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
+              changeHistoryCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, emailWhitelist);
               break;
             case 'Disapproved Ads':
               disapprovedAdsCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
@@ -536,7 +536,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- END DISAPPROVED ADS CHECK -----------------------------  
   
 //----------------------------- START CHANGE HISTORY CHECK -----------------------------
-  function changeHistoryCheck(frequency, accountName, logSheet, mailbodySheet, accountId){
+  function changeHistoryCheck(frequency, accountName, logSheet, mailbodySheet, accountId, emailWhitelist){
     var accountIdClean = accountId.replace(/-/g, '');
 
     var userRex = emailWhitelist.replace(/\s*,\s*/g, '|');
@@ -2234,7 +2234,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var settingsSheet = spreadsheet.getSheetByName('Settings');
 
     // Get all Google Ads account IDs from the "Settings" tab in column A.
-    var accountIdsInSheet = settingsSheet.getRange('A7:A').getValues().flat().filter(Boolean);
+    var accountIdsInSheet = settingsSheet.getRange('A3:A').getValues().flat().filter(Boolean);
     var numberOfAccounts = accountIdsInSheet.length;
     
     // Get all Google Ads accounts with the specified account label.
