@@ -2700,6 +2700,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 function getOrCreateLogSheet(frequency, consultantName) {
   var name = frequency + 'Log' + consultantName;
   var sheet = spreadsheet.getSheetByName(name) || spreadsheet.insertSheet(name);
+  sheet.hideSheet()
   if (sheet.getLastRow() === 0) sheet.appendRow(['Script', 'Account ID', 'Date']);
   return sheet;
 }
