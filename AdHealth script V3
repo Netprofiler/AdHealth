@@ -176,7 +176,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 // Hourly check have the highest priority. They will be done first. 
   
   function runChecks(checkFrequency) {
-    Logger.log(checkFrequency)
     var settingsSheet = spreadsheet.getSheetByName('Settings');
 
     // Get all account IDs from column A starting at row 3.
@@ -2259,32 +2258,36 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         settingsSheet.getRange('M' + emptyRow).setValue(20);
         settingsSheet.getRange('W' + emptyRow).setValue(1);
         
-        var columns = ['C', 'D', 'E', 'F', 'G', 'J', 'L', 'N', 'P', 'V', 'X'];
+        var columns = ['E', 'F', 'G', 'H', 'I', 'L', 'N', 'P', 'R', 'X', 'Z'];
         for (var i = 0; i < columns.length; i++) {
           settingsSheet.getRange(columns[i] + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
             .setAllowInvalid(false)
             .requireValueInList(['Hourly', 'Daily', 'Weekly', 'Monthly', 'Never'], true)
             .build());
-          if(columns[i] === 'L' || columns[i] === 'N' || columns[i] === 'V'){
+          if(columns[i] === 'N' || columns[i] === 'P' || columns[i] === 'X'){
             settingsSheet.getRange(columns[i] + emptyRow).setValue('Daily');
-          } else if (columns[i] === 'P') {
+          } else if (columns[i] === 'R') {
             settingsSheet.getRange(columns[i] + emptyRow).setValue('Never');
-          }else if (columns[i] === 'X') {
+          }else if (columns[i] === 'Z') {
             settingsSheet.getRange(columns[i] + emptyRow).setValue('Monthly');
           } else {
             settingsSheet.getRange(columns[i] + emptyRow).setValue('Hourly');
           }
         }
 
-        settingsSheet.getRange('O' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+        settingsSheet.getRange('C' + i).activate();
+        settingsSheet.getRange('C3').copyTo(spreadsheet.getActiveRange(), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
+        settingsSheet.getActiveRangeList().clear({contentsOnly: true, skipFilteredRows: true});
+
+        settingsSheet.getRange('Q' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
           .setAllowInvalid(true)
           .requireCheckbox()
           .build());        
-        settingsSheet.getRange('R' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+        settingsSheet.getRange('T' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
           .setAllowInvalid(true)
           .requireCheckbox()
           .build());
-        settingsSheet.getRange('S' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
+        settingsSheet.getRange('U' + emptyRow).setDataValidation(SpreadsheetApp.newDataValidation()
           .setAllowInvalid(true)
           .requireCheckbox()
           .build());
