@@ -311,7 +311,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               var campaignType = settingsSheet.getRange(rowNumber, campaignTypePosition).getValue();
               var limitTypePosition = checkNames.indexOf('Upper limit only') + columnCorrection;
               var limitType = settingsSheet.getRange(rowNumber, limitTypePosition).getValue();
-              budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType);
+              budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType, columnCorrection);
               break;
             case 'Conversion recency check':
               var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + columnCorrection;
@@ -1572,7 +1572,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START BUDGET MONITORING -----------------------------
   
-  function budgetMonitoring(frequency, accountName, logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType){
+  function budgetMonitoring(frequency, accountName, logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType, columnCorrection){
     if(!accountBudget){
       mailbodySheet.appendRow([accountName, "Budget monitoring error", "", "", " ", "No budget is given."]);
       return
