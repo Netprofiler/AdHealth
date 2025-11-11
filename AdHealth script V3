@@ -2391,33 +2391,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     
   function sendEmail(mailadres) {
     var mainMailBodySheet = spreadsheet.getSheetByName("MailBody"&consultantName);
-    
-    // List of MailBody sheets to process
-    var mailBodySheets = ["MailBody1", "MailBody2", "MailBody3", "MailBody4", "MailBody5"];
-
-    mailBodySheets.forEach(function(sheetName) {
-      var sourceSheet = spreadsheet.getSheetByName(sheetName);
-
-      if (sourceSheet) {
-        // Determine if there is content to copy
-        var lastRow = sourceSheet.getLastRow();
-        if (lastRow > 1) { // There is something to copy
-          var rangeToCopy = sourceSheet.getRange("A2:F" + lastRow).getValues();
-
-          // Find the first empty row in the destination sheet
-          var firstEmptyRow = mainMailBodySheet.getLastRow() + 1; // Assumes there's always content above
-
-          // Paste the values into the destination sheet
-          mainMailBodySheet.getRange(firstEmptyRow, 1, rangeToCopy.length, rangeToCopy[0].length).setValues(rangeToCopy);
-
-          // Clear the source sheet starting at row 2
-          sourceSheet.getRange("A2:F" + lastRow).clearContent();
-        }
-      }
-    });
-    
-    
-    
+      
     var mailBodyData = mainMailBodySheet.getDataRange().getValues();
     var headerRow = mailBodyData[0];
     var tableRows = [];
