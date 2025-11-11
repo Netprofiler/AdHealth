@@ -2275,7 +2275,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           }
         }
 
-        settingsSheet.getRange('C' + i).activate();
+        settingsSheet.getRange('C' + emptyRow).activate();
         settingsSheet.getRange('C3').copyTo(spreadsheet.getActiveRange(), SpreadsheetApp.CopyPasteType.PASTE_NORMAL, false);
         settingsSheet.getActiveRangeList().clear({contentsOnly: true, skipFilteredRows: true});
 
