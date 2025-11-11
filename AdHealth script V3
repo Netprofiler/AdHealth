@@ -311,7 +311,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               var campaignType = settingsSheet.getRange(rowNumber, campaignTypePosition).getValue();
               var limitTypePosition = checkNames.indexOf('Upper limit only') + columnCorrection;
               var limitType = settingsSheet.getRange(rowNumber, limitTypePosition).getValue();
-              budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, i, limitType);
+              budgetMonitoring(frequency, accountNames[i], logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType);
               break;
             case 'Conversion recency check':
               var daysToCheckPosition = checkNames.indexOf('Days since last conversion') + columnCorrection;
@@ -1572,7 +1572,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START BUDGET MONITORING -----------------------------
   
-  function budgetMonitoring(frequency, accountName, logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, accountRow, limitType){
+  function budgetMonitoring(frequency, accountName, logSheet, mailbodySheet, accountId, accountBudget, campaignType, checkNames, rowNumber, limitType){
     if(!accountBudget){
       mailbodySheet.appendRow([accountName, "Budget monitoring error", "", "", " ", "No budget is given."]);
       return
@@ -1616,14 +1616,14 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var getDaysInCurrentMonth = getDaysInCurrentMonth();
       
       // get column and set day pacing 
-      var dayPacingPosition = checkNames.indexOf('Day pacing') + 5;
+      var dayPacingPosition = checkNames.indexOf('Day pacing') + columnCorrection;
       var dayPacing = dayOfMonth / getDaysInCurrentMonth;
-      settingsSheet.getRange(accountRow + 7, dayPacingPosition).setValue(dayPacing);
+      settingsSheet.getRange(rowNumber, dayPacingPosition).setValue(dayPacing);
       
       // get column and set spend pacing 
-      var spendPacingPosition = checkNames.indexOf('Spend pacing') + 5;
+      var spendPacingPosition = checkNames.indexOf('Spend pacing') + columnCorrection;
       var spendPacing = spendMtD / accountBudget;
-      settingsSheet.getRange(accountRow + 7, spendPacingPosition).setValue(spendPacing);
+      settingsSheet.getRange(rowNumber, spendPacingPosition).setValue(spendPacing);
       
       var acceptedDeviation = 100 * (0.88 ** (dayOfMonth - 2));
       
