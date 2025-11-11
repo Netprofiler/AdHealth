@@ -2254,9 +2254,9 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         var emptyRow = settingsSheet.getRange('A7:A').getValues().findIndex(row => !row[0]) + 7;
         settingsSheet.getRange('A' + emptyRow).setValue(accountId);
         settingsSheet.getRange('B' + emptyRow).setValue(accountName);
-        settingsSheet.getRange('K' + emptyRow).setValue(100);
-        settingsSheet.getRange('M' + emptyRow).setValue(20);
-        settingsSheet.getRange('W' + emptyRow).setValue(1);
+        settingsSheet.getRange('M' + emptyRow).setValue(100);
+        settingsSheet.getRange('O' + emptyRow).setValue(20);
+        settingsSheet.getRange('Y' + emptyRow).setValue(1);
         
         var columns = ['E', 'F', 'G', 'H', 'I', 'L', 'N', 'P', 'R', 'X', 'Z'];
         for (var i = 0; i < columns.length; i++) {
