@@ -2390,7 +2390,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
     
   function sendEmail(mailadres) {
-    var mainMailBodySheet = spreadsheet.getSheetByName("MailBody"&consultantName);
+    var mainMailBodySheet = spreadsheet.getSheetByName("MailBody" + consultantName);
       
     var mailBodyData = mainMailBodySheet.getDataRange().getValues();
     var headerRow = mailBodyData[0];
