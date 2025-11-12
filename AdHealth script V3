@@ -2498,7 +2498,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         api_key: apiKey,
         sender: "ga@netprofiler.nl",
         to: mailadres,
-        subject: "AdHealth alerts",
+        subject: "All - AdHealth alerts",
         html_body: emailBody,
       };
       
