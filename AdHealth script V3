@@ -597,7 +597,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       .withCondition('customer_client.id = "' + accountIdClean + '"');
 
     // Open the Link Checker Log sheet by its name
-    var linkCheckerLogSheet = spreadsheet.getSheetByName('LinkCheckerLog');
+    var linkCheckerLogSheet = spreadsheet.getSheetByName('LinkCheckerLog' + consultantName) || spreadsheet.insertSheet('LinkCheckerLog' + consultantName);
     var checkedLinksSheet = spreadsheet.getSheetByName('checkedLinks') || spreadsheet.insertSheet('checkedLinks');
     var brokenLinksSheet = spreadsheet.getSheetByName('brokenLinks') || spreadsheet.insertSheet('brokenLinks');
     
