@@ -232,11 +232,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               var frequency = "Daily";
               break;
             case 'Monthly budget':
+              var budgetPosition = checkNames.indexOf('Monthly budget') + columnCorrection;
+              var accountBudget = settingsSheet.getRange(rowNumber, budgetPosition).getValue();
               var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + columnCorrection;
               var budgetMonitorFrequecy = settingsSheet.getRange(rowNumber, positionBudgetFrequecy).getValue();
-              var positionBudget = checkNames.indexOf('Monthly budget') + columnCorrection;
-              var budgetMonitor = settingsSheet.getRange(rowNumber, positionBudget).getValue();
-              if(budgetMonitor && budgetMonitorFrequecy === "Never") {
+              if(accountBudget && budgetMonitorFrequecy === "Never") {
+                settingsSheet.getRange(rowNumber, positionBudgetFrequecy).setValue("Daily");
                 var frequency = "Daily";
               }
               break;
@@ -305,8 +306,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               }
               break;
             case 'Budget monitoring':
-              var budgetPosition = checkNames.indexOf('Monthly budget') + columnCorrection;
-              var accountBudget = settingsSheet.getRange(rowNumber, budgetPosition).getValue();
               var campaignTypePosition = checkNames.indexOf('Only Shopping/ Pmax/Search') + columnCorrection;
               var campaignType = settingsSheet.getRange(rowNumber, campaignTypePosition).getValue();
               var limitTypePosition = checkNames.indexOf('Upper limit only') + columnCorrection;
