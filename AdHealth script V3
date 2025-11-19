@@ -2168,10 +2168,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         }
       }
       
-      // Create linker checker log
-      var linkCheckerLogSheet = spreadsheet.insertSheet("LinkCheckerLog");
-      linkCheckerLogSheet.hideSheet();
-      
       // Set formating to headers
       sheet.getRange('A1:X1').activate();
       sheet.getActiveRangeList().setBackground('#522887');
@@ -2251,7 +2247,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       // Check if the account ID is already in the sheet.
       if (accountIdsInSheet.indexOf(accountId) === -1) {
         // Find the first empty row after row 6 and add the account ID and name.
-        var emptyRow = settingsSheet.getRange('A7:A').getValues().findIndex(row => !row[0]) + 7;
+        var emptyRow = settingsSheet.getRange('A7:A').getValues().findIndex(row => !row[0]) + 3;
         settingsSheet.getRange('A' + emptyRow).setValue(accountId);
         settingsSheet.getRange('B' + emptyRow).setValue(accountName);
         settingsSheet.getRange('M' + emptyRow).setValue(100);
@@ -2291,7 +2287,32 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           .setAllowInvalid(true)
           .requireCheckbox()
           .build());
-        
+      } else {
+        // Account bestaat al → consultantName toevoegen indien nodig.
+
+        // Vind de rij van dit account (index + 3 omdat data vanaf A3 start)
+        var rowIndex = accountIdsInSheet.indexOf(accountId) + 3;
+
+        // Haal huidige waarde uit kolom C
+        var currentValue = settingsSheet.getRange('C' + rowIndex).getValue();
+
+        // Controleer of consultantName al aanwezig is
+        var consultants = currentValue
+          .toString()
+          .split(',')
+          .map(function(s) { return s.trim(); })
+          .filter(Boolean);
+
+        if (consultants.indexOf(consultantName) === -1) {
+          // Consultant toevoegen
+          consultants.push(consultantName);
+
+          // Nieuwe comma-separated string maken
+          var newValue = consultants.join(', ');
+
+          // Wegschrijven naar kolom C
+          settingsSheet.getRange('C' + rowIndex).setValue(newValue);
+        }
       }
     }
   }
