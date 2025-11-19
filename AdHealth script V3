@@ -228,15 +228,11 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             case 'Merchant Center ID check':
               var frequency = "Daily";
               break;
-            case 'Monthly budget':
-              var frequency = "Daily";
-              break;
-            case 'Monthly budget':
+            case 'Budget monitoring':
               var budgetPosition = checkNames.indexOf('Monthly budget') + columnCorrection;
               var accountBudget = settingsSheet.getRange(rowNumber, budgetPosition).getValue();
               var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + columnCorrection;
               var budgetMonitorFrequecy = settingsSheet.getRange(rowNumber, positionBudgetFrequecy).getValue();
-              Logger.log(accountBudget + " " + budgetMonitorFrequecy)
               if(accountBudget && budgetMonitorFrequecy === "Never") {
                 settingsSheet.getRange(rowNumber, positionBudgetFrequecy).setValue("Daily");
                 Logger.log("Set budget monitoring frequency to Daily")
