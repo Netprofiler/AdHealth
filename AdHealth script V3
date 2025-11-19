@@ -169,7 +169,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
 
     Logger.log("All checks were finished for this round.")
-
+    return
   }
   
 //----------------------------- START ALL CHECKS -----------------------------
@@ -236,8 +236,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
               var accountBudget = settingsSheet.getRange(rowNumber, budgetPosition).getValue();
               var positionBudgetFrequecy = checkNames.indexOf('Budget monitoring') + columnCorrection;
               var budgetMonitorFrequecy = settingsSheet.getRange(rowNumber, positionBudgetFrequecy).getValue();
+              Logger.log(accountBudget + " " + budgetMonitorFrequecy)
               if(accountBudget && budgetMonitorFrequecy === "Never") {
                 settingsSheet.getRange(rowNumber, positionBudgetFrequecy).setValue("Daily");
+                Logger.log("Set budget monitoring frequency to Daily")
                 var frequency = "Daily";
               }
               break;
