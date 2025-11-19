@@ -206,7 +206,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
       // Controleer of dit account bij deze consultant hoort
       if (clientConsultants.indexOf(consultantName) === -1) {
-        Logger.log(checkFrequency + " -- " & accountname & " -- Consultant " + consultantName + " is niet aan dit account gekoppeld.");
+        //Logger.log(checkFrequency + " -- " & accountname & " -- Consultant " + consultantName + " is niet aan dit account gekoppeld.");
         continue;
       }
 
@@ -2363,7 +2363,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       }
     }
     
-    var logsSheetName = frequency + 'Log';
+    var logsSheetName = frequency + 'Log' + consultantname;
     var logsSheet = spreadsheet.getSheetByName(logsSheetName);
     if (logsSheet) {
       var logsLastRow = logsSheet.getLastRow();
