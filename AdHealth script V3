@@ -2362,34 +2362,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
   
   function clearLogs(frequency){
-    var settingsSheet = spreadsheet.getSheetByName('Settings');
-
-    // Get all account names from column B starting at row 7.
-    var accountNames = settingsSheet.getRange('B7:B').getValues().flat().filter(Boolean);
-    
-    for (var i = 0; i < accountNames.length; i++) {
-      var sheetName = accountNames[i];
-      var sheet = spreadsheet.getSheetByName(sheetName);
-      if (sheet) {
-        var lastRow = sheet.getLastRow();
-        for (var row = lastRow; row > 0; row--) {
-          var currentFrequency = sheet.getRange(row, 2).getValue();
-          if (currentFrequency == frequency) {
-            sheet.deleteRow(row);
-          }
-        }
-      }
-    }
-    
     var logsSheetName = frequency + 'Log' + consultantname;
     var logsSheet = spreadsheet.getSheetByName(logsSheetName);
     if (logsSheet) {
       var logsLastRow = logsSheet.getLastRow();
       logsSheet.getRange("A2:C" + logsLastRow).clearContent();
-      /*for (var logsRow = logsLastRow; logsRow >= 2; logsRow--) {
-        logsSheet.deleteRow(logsRow);
-        Logger.log(logsSheetName + " has been clear from row 2 untill row " + logsLastRow);
-      }*/
+      Logger.log(logsSheetName + " has been clear from row 2 untill row " + logsLastRow);
     }
   }
   
