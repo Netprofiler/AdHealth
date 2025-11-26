@@ -2362,7 +2362,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
   
   function clearLogs(frequency){
-    var logsSheetName = frequency + 'Log' + consultantname;
+    var logsSheetName = frequency + 'Log' + consultantName;
     var logsSheet = spreadsheet.getSheetByName(logsSheetName);
     if (logsSheet) {
       var logsLastRow = logsSheet.getLastRow();
