@@ -2243,8 +2243,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
       // Check if the account ID is already in the sheet.
       if (accountIdsInSheet.indexOf(accountId) === -1) {
-        // Find the first empty row after row 6 and add the account ID and name.
-        var emptyRow = settingsSheet.getRange('A7:A').getValues().findIndex(row => !row[0]) + 3;
+        // Find the first empty row after row 2 and add the account ID and name.
+        var emptyRow = settingsSheet.getRange('A3:A').getValues().findIndex(row => !row[0]) + 3;
         settingsSheet.getRange('A' + emptyRow).setValue(accountId);
         settingsSheet.getRange('B' + emptyRow).setValue(accountName);
         settingsSheet.getRange('M' + emptyRow).setValue(100);
