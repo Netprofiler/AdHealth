@@ -2000,12 +2000,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           campaign.shopping_setting.merchant_id, 
           campaign.status, 
           campaign.experiment_type, 
-          campaign.end_date 
+          campaign.end_date_time 
         FROM performance_max_placement_view 
         WHERE 
           campaign.status = 'ENABLED' 
           AND campaign.experiment_type = 'BASE' 
-          AND campaign.end_date > '` + todayString + `' 
+          AND campaign.end_date_time > '` + todayString + `' 
         ORDER BY 
           campaign.shopping_setting.merchant_id DESC
       `;
@@ -2033,12 +2033,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             campaign.shopping_setting.merchant_id, 
             campaign.status, 
             campaign.experiment_type, 
-            campaign.end_date 
+            campaign.end_date_time 
           FROM campaign 
           WHERE 
             campaign.status = 'ENABLED' 
             AND campaign.experiment_type = 'BASE' 
-            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.end_date_time > '` + todayString + `' 
           ORDER BY 
             campaign.shopping_setting.merchant_id DESC
         `;
