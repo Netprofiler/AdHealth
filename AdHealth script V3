@@ -618,7 +618,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
          ad_group_ad.status = 'ENABLED' 
          AND ad_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND campaign.end_date > '` + todayString + `' 
+         AND campaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -640,7 +640,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         WHERE 
          asset_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND campaign.end_date > '` + todayString + `' 
+         AND campaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -681,12 +681,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           asset.final_urls, 
           campaign.status, 
           campaign.experiment_type, 
-          campaign.end_date 
+          campaign.end_date_time 
         FROM campaign_asset 
         WHERE 
           campaign_asset.status = 'ENABLED' 
           AND campaign.status = 'ENABLED' 
-          AND campaign.end_date > '` + todayString + `' 
+          AND campaign.end_date_time > '` + todayString + `' 
           AND campaign.experiment_type != 'EXPERIMENT'  
         `
       );
@@ -707,13 +707,13 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           campaign.status, 
           ad_group.status, 
           campaign.experiment_type, 
-          campaign.end_date 
+          campaign.end_date_time 
         FROM ad_group_asset 
         WHERE 
           campaign.status = 'ENABLED' 
           AND ad_group.status = 'ENABLED' 
           AND ad_group_asset.status = 'ENABLED' 
-          AND campaign.end_date > '` + todayString + `'
+          AND campaign.end_date_time > '` + todayString + `'
           AND campaign.experiment_type != 'EXPERIMENT'   
         `
       );
@@ -825,7 +825,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             AND ad_group_ad.status = 'ENABLED' 
             AND ad_group.status = 'ENABLED' 
             AND campaign.status = 'ENABLED'
-            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.end_date_time > '` + todayString + `' 
             AND campaign.experiment_type != 'EXPERIMENT' 
           `
         );
@@ -868,7 +868,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             asset_group.final_urls CONTAINS ANY ('` + brokenUrlsString + `')
             AND asset_group.status = 'ENABLED' 
             AND campaign.status = 'ENABLED'
-            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.end_date_time > '` + todayString + `' 
             AND campaign.experiment_type != 'EXPERIMENT' 
           `
         );
@@ -992,7 +992,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           WHERE 
             asset.final_urls CONTAINS ANY ('` + brokenUrlsString + `') 
             AND campaign_asset.status = 'ENABLED' 
-            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.end_date_time > '` + todayString + `' 
             AND campaign.experiment_type != 'EXPERIMENT' 
             AND campaign.status = 'ENABLED'
           `
@@ -1075,7 +1075,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             asset.final_urls CONTAINS ANY ('` + brokenUrlsString + `') 
             AND ad_group_asset.status = 'ENABLED' 
             AND campaign.status = 'ENABLED' 
-            AND campaign.end_date > '` + todayString + `' 
+            AND campaign.end_date_time > '` + todayString + `' 
             AND campaign.experiment_type != 'EXPERIMENT' 
             AND ad_group.status = 'ENABLED' 
           `
@@ -1357,7 +1357,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var report = AdsApp.report(
           "SELECT campaign.name, campaign.maximize_conversion_value.target_roas, campaign.target_roas.target_roas, " +
           "bidding_strategy.target_roas.target_roas, bidding_strategy.maximize_conversion_value.target_roas " +
-          "FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT' AND campaign.end_date > '" + todayString + "'");
+          "FROM campaign WHERE campaign.status = 'ENABLED' AND campaign.experiment_type != 'EXPERIMENT' AND campaign.end_date_time > '" + todayString + "'");
       
       var rows = report.rows();
       while (rows.hasNext()) {
@@ -1752,7 +1752,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     function handleCampaigns(campaignIteratorFunction, campaignType) {
       var campaignIterator = campaignIteratorFunction
         .withCondition("Status = ENABLED")
-        .withCondition('campaign.end_date > "' + todayString + '"')
+        .withCondition('campaign.end_date_time > "' + todayString + '"')
         .get();
 
       while (campaignIterator.hasNext()) {
@@ -1796,7 +1796,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         WHERE ad_group.status = 'ENABLED'
           AND campaign.status = 'ENABLED'
           AND campaign.experiment_type = 'BASE'
-          AND campaign.end_date > '` + todayString + `' 
+          AND campaign.end_date_time > '` + todayString + `' 
       `;
       var adGroupRows = AdsApp.search(adGroupQuery);
       while (adGroupRows.hasNext()) {
@@ -1828,7 +1828,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         WHERE ad_group.status = 'ENABLED'
           AND campaign.status = 'ENABLED'
           AND campaign.advertising_channel_type = 'SEARCH'
-          AND campaign.end_date > '` + todayString + `'
+          AND campaign.end_date_time > '` + todayString + `'
           AND ad_group.type != 'SEARCH_DYNAMIC_ADS'
       `;
       var keywordAdGroupRows = AdsApp.search(keywordAdGroupQuery);
