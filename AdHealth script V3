@@ -95,6 +95,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   //var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
   
   //Get right account label and emailaddress
+  var accountLabel = '';
+  var mailadres = '';
   var lastRow = labelsSheet.getLastRow();
   var data = labelsSheet.getRange(2, 1, lastRow - 1, 3).getValues(); // A2:C
 
@@ -110,8 +112,13 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
   }
 
+  if (!accountLabel || !mailadres) {
+    Logger.log('Consultant "' + consultantName + '" niet gevonden in de Labels sheet. Script gestopt.');
+    return;
+  }
+
   if(weekDay == "Monday" && hour == 23){
-    logAccounts(today);
+    logAccounts(todayString);
   }
 
   if(!shortUrl) {
@@ -130,7 +137,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       clearPacing();
       
     }
-    if(weekDay == "SaturDay" && hour == 0){
+    if(weekDay == "Saturday" && hour == 0){
       clearLog("Weekly");
     }
     if(firstDayOfTheMonth && hour == 0){
@@ -244,10 +251,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         var logSheet = getOrCreateLogSheet(checkFrequency, consultantName)
         
         // Check if the script for this account ID has already run in the period. -----------------------------------------------------------------
+        var alreadyRun = false;
         if (frequency === checkFrequency) {
-          var logData = logSheet.getDataRange();
-          var logData = logData.getValues();
-          var alreadyRun = logData.some(row => row[0] === checkName && row[1] === accountId);
+          var logData = logSheet.getDataRange().getValues();
+          alreadyRun = logData.some(row => row[0] === checkName && row[1] === accountId);
         }
 
         if (!alreadyRun && frequency == checkFrequency && !timeOut) {
@@ -256,8 +263,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
             case 'Account down':
               if(hour > 5){
                 accountDown(frequency, accountNames[i], logSheet, mailbodySheet, accountId);
-                break;
               }
+              break;
             case 'Unknown user made a change':
               changeHistoryCheck(frequency, accountNames[i], logSheet, mailbodySheet, accountId, emailWhitelist);
               break;
