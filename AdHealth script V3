@@ -1463,91 +1463,32 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
 
-  // TODO: vul hieronder de service account gegevens in vanuit het JSON-sleutelbestand.
-  // Stappen: Google Cloud Console → Service accounts → sleutel aanmaken (JSON) →
-  //          service account e-mail en private_key hieronder plakken →
-  //          service account toevoegen als gebruiker in Google Merchant Center.
-  var MERCHANT_SA_EMAIL = 'JOUW-SERVICE-ACCOUNT@project.iam.gserviceaccount.com';
-  var MERCHANT_SA_KEY   = '-----BEGIN PRIVATE KEY-----\nJOUW-PRIVATE-KEY\n-----END PRIVATE KEY-----\n';
-
-  function getMerchantApiToken() {
-    var now = Math.floor(Date.now() / 1000);
-    var header  = Utilities.base64EncodeWebSafe(JSON.stringify({alg: 'RS256', typ: 'JWT'})).replace(/=+$/, '');
-    var claims  = Utilities.base64EncodeWebSafe(JSON.stringify({
-      iss:   MERCHANT_SA_EMAIL,
-      scope: 'https://www.googleapis.com/auth/content',
-      aud:   'https://oauth2.googleapis.com/token',
-      exp:   now + 3600,
-      iat:   now
-    })).replace(/=+$/, '');
-    var toSign    = header + '.' + claims;
-    var signature = Utilities.base64EncodeWebSafe(Utilities.computeRsaSha256Signature(toSign, MERCHANT_SA_KEY)).replace(/=+$/, '');
-    var jwt = toSign + '.' + signature;
-
-    var response = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
-      method: 'post',
-      payload: { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt },
-      muteHttpExceptions: true
-    });
-    if (response.getResponseCode() === 200) {
-      return JSON.parse(response.getContentText()).access_token;
-    }
-    Logger.log('Merchant API token fout: ' + response.getContentText());
-    return null;
-  }
-
   function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold){
     var pageToken;
-    var pageSize = 250;
+    var maxResults = 250;
+
     var totalProducts = 0;
     var numberDisapprovedProducts = 0;
-    var token = getMerchantApiToken();
-    if (!token) {
-      Logger.log(frequency + ' -- ' + accountName + ' -- Disapproved products -- Kon geen token ophalen, check service account.');
-      return;
-    }
 
     do {
-      var url = 'https://merchantapi.googleapis.com/products/v1beta/accounts/' + merchantCenterId + '/productStatuses?pageSize=' + pageSize;
-      if (pageToken) url += '&pageToken=' + encodeURIComponent(pageToken);
-
-      var response = UrlFetchApp.fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + token },
-        muteHttpExceptions: true
+      var productStatuses = ShoppingContent.Productstatuses.list(merchantCenterId, {
+        pageToken: pageToken,
+        maxResults: maxResults
       });
 
-      if (response.getResponseCode() !== 200) {
-        Logger.log('Merchant API fout voor account ' + merchantCenterId + ': ' + response.getContentText());
-        break;
-      }
-
-      var data = JSON.parse(response.getContentText());
-
-      if (data.productStatuses && data.productStatuses.length > 0) {
-        var products = data.productStatuses;
-        var productLimit = Math.min(products.length, 1000);
-
+      if (productStatuses.resources) {
+        var productLimit = Math.min(productStatuses.resources.length, 1000);
         for (var i = 0; i < productLimit; i++) {
-          var product = products[i];
+          var product = productStatuses.resources[i];
           totalProducts++;
-
-          var isDisapproved = false;
-          if (product.destinationStatuses) {
-            for (var j = 0; j < product.destinationStatuses.length; j++) {
-              var dest = product.destinationStatuses[j];
-              if (dest.disapprovedCountries && dest.disapprovedCountries.length > 0) {
-                isDisapproved = true;
-                break;
-              }
-            }
+          if (product['destinationStatuses'][0]['status'] == 'disapproved') {
+            numberDisapprovedProducts++;
           }
-          if (isDisapproved) numberDisapprovedProducts++;
         }
       } else {
-        Logger.log('Geen producten meer in account ' + merchantCenterId);
+        Logger.log('No more products in account ' + merchantCenterId);
       }
-
-      pageToken = data.nextPageToken;
+      pageToken = productStatuses.nextPageToken;
     } while (pageToken);
 
     var disapprovalPercentage = totalProducts > 0 ? (numberDisapprovedProducts * 100) / totalProducts : 0;
