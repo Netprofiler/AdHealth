@@ -138,10 +138,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       
     }
     if(weekDay == "Saturday" && hour == 0){
-      clearLog("Weekly");
+      clearLogs("Weekly");
     }
     if(firstDayOfTheMonth && hour == 0){
-      clearLog("Monthly");
+      clearLogs("Monthly");
     }
 
     // Send email with foundings of last run in case it timed out
@@ -1863,7 +1863,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START Lin Rodnitzky Ratio -----------------------------
 
-  function linRodnitzkyRatio(frequency, accountName, logSheet, mailbodySheet, accountId, daysToCheck){
+  function linRodnitzkyRatio(frequency, accountName, logSheet, mailbodySheet, accountId){
     var accountIdClean = accountId.replace(/-/g, '');
     var today = new Date();
     var accountSelector = AdsManagerApp.accounts()
