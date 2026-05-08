@@ -1464,112 +1464,66 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
   function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold){
-    var productIdToInclude = [];
-    var productIdToExclude = [];
-    //var productThreshold = productThreshold / 100;
-    
     var pageToken;
-    var maxResults = 250;
-    // These variables are used to fetch all the products (maximum of 250) on a page
-    // in the merchant centre. We can then iterate over the pages by using the next
-    // page token which is given as part of the response to our request.
-
+    var pageSize = 250;
     var totalProducts = 0;
     var numberDisapprovedProducts = 0;
+    var token = ScriptApp.getOAuthToken();
 
     do {
-      // This is a quick check to see if the filters supplied are valid
-      checkFiltersDontContradict(productIdToInclude, productIdToExclude);
+      var url = 'https://merchantapi.googleapis.com/products/v1beta/accounts/' + merchantCenterId + '/productStatuses?pageSize=' + pageSize;
+      if (pageToken) url += '&pageToken=' + encodeURIComponent(pageToken);
 
-      var productStatuses = ShoppingContent.Productstatuses.list(merchantCenterId, {
-        pageToken: pageToken,
-        maxResults: maxResults
+      var response = UrlFetchApp.fetch(url, {
+        headers: { 'Authorization': 'Bearer ' + token },
+        muteHttpExceptions: true
       });
 
-      // If the 'approvalStatus' of our product is not 'approved' then we say it is disapproved.
-      if (productStatuses.resources) {
-        //Logger.log(productStatuses.resources.length + " products found");
-        if(productStatuses.resources.length > 1000){
-          var productLimit = 1000;
-        } else {
-          var productLimit = productStatuses.resources.length;
-        }
+      if (response.getResponseCode() !== 200) {
+        Logger.log('Merchant API fout voor account ' + merchantCenterId + ': ' + response.getContentText());
+        break;
+      }
+
+      var data = JSON.parse(response.getContentText());
+
+      if (data.productStatuses && data.productStatuses.length > 0) {
+        var products = data.productStatuses;
+        var productLimit = Math.min(products.length, 1000);
+
         for (var i = 0; i < productLimit; i++) {
-          product = productStatuses.resources[i];
-          if (satisfiesAllFilters(product, productIdToInclude, productIdToExclude)) {
-            totalProducts += 1;
-            var problemen = (product['destinationStatuses'][0]['status']);
-            //Logger.log(i + " " + problemen);
-            if (product['destinationStatuses'][0]['status'] == 'disapproved') {
-              numberDisapprovedProducts++;
+          var product = products[i];
+          totalProducts++;
+
+          var isDisapproved = false;
+          if (product.destinationStatuses) {
+            for (var j = 0; j < product.destinationStatuses.length; j++) {
+              var dest = product.destinationStatuses[j];
+              if (dest.disapprovedCountries && dest.disapprovedCountries.length > 0) {
+                isDisapproved = true;
+                break;
+              }
             }
           }
+          if (isDisapproved) numberDisapprovedProducts++;
         }
       } else {
-        Logger.log('No more products in account ' + merchantCenterId);
+        Logger.log('Geen producten meer in account ' + merchantCenterId);
       }
-      // We then pull our next PageToken from our response and use it to make a new request.
-      // If there is no next PageToken then we exit our iteration.
-      pageToken = productStatuses.nextPageToken;
+
+      pageToken = data.nextPageToken;
     } while (pageToken);
 
-    var disapprovalPercentage = (numberDisapprovedProducts * 100) / totalProducts;
+    var disapprovalPercentage = totalProducts > 0 ? (numberDisapprovedProducts * 100) / totalProducts : 0;
     Logger.log(frequency + " -- " + accountName + " -- Disapproved products -- " + numberDisapprovedProducts + ' of ' + totalProducts
       + ' products in your account were disapproved - '
-      + disapprovalPercentage.toFixed(2) + '%')
-    
+      + disapprovalPercentage.toFixed(2) + '%');
+
     Logger.log(disapprovalPercentage + " " + productThreshold);
-    // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
     if (disapprovalPercentage >= productThreshold) {
       logSheet.appendRow(["Disapproved products", accountId, todayString]);
-      mailbodySheet.appendRow([accountName, "Disapproved products", "", "", "", numberDisapprovedProducts + ' of ' + totalProducts + ' products in your GMC (' + merchantCenterId + ') were disapproved - ' + disapprovalPercentage.toFixed(2) + '%' + '\n']);  
+      mailbodySheet.appendRow([accountName, "Disapproved products", "", "", "", numberDisapprovedProducts + ' of ' + totalProducts + ' products in your GMC (' + merchantCenterId + ') were disapproved - ' + disapprovalPercentage.toFixed(2) + '%' + '\n']);
     }
     logSheet.appendRow(["Disapproved products", accountId, todayString]);
-  }
-
-  function checkFiltersDontContradict(productIdToInclude, productIdToExclude) {
-    if (productIdToInclude.length && productIdToExclude.length) {
-      for (var i in productIdToInclude) {
-        if (productIdToExclude.indexOf(productIdToInclude[i]) > -1) {
-          throw "Filters have shared values - can not include and exclude simultaneously";
-        }
-      }
-    } else {
-      return true;
-    }
-  }
-
-  function satisfiesAllFilters(product, productIdToInclude, productIdToExclude) {
-    return (satisfiesIdIncludeFilters(productIdToInclude, product)
-      && satisfiesIdExcludeFilters(productIdToExclude, product));
-  }
-
-  function satisfiesIdIncludeFilters(productIdToInclude, product) {
-    if (productIdToInclude.length) {
-      for (index = 0; index < productIdToInclude.length; ++index) {
-        if (product['productId'].indexOf(productIdToInclude[index]) !== -1) {
-          return true;
-        }
-      }
-      return false;
-    }
-    else {
-      return true;
-    }
-  }
-
-  function satisfiesIdExcludeFilters(productIdToExclude, product) {
-    if (productIdToExclude.length) {
-      for (index = 0; index < productIdToExclude.length; ++index) {
-        if (product['productId'].indexOf(productIdToExclude[index]) == -1) {
-          return true;
-        }
-      }
-      return false;
-    }
-    else {
-      return true;
-    }
   }
   
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
