@@ -123,7 +123,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   Logger.log(shortUrl)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
-    checkAccount(accountLabel);
+    checkAccount();
     
     // Clear the logs
     if(weekDay != "Saturday" && hour == 0){
@@ -2215,7 +2215,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 // Checking if all account that have the label are in the sheet. If not, it's added.
 // Dropdown menu and default settings are added as well.  
   
-  function checkAccount(accountLabel) {
+  function checkAccount() {
     var settingsSheet = spreadsheet.getSheetByName('Settings');
 
     // Get all Google Ads account IDs from the "Settings" tab in column A.
