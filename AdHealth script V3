@@ -1473,7 +1473,7 @@ function disapprovedProducts(
   merchantCenterId,
   productThreshold
 ) {
-  Logger.log("V3");
+  Logger.log("V4");
   var productIdToInclude = [];
   var productIdToExclude = [];
 
@@ -2739,6 +2739,47 @@ function formatError_(e) {
   }
 
   return e.message || String(e);
+}
+
+function satisfiesIdIncludeFilters(productIdToInclude, product) {
+  if (productIdToInclude.length) {
+    var productId = getProductIdFromStatus_(product);
+
+    for (var index = 0; index < productIdToInclude.length; ++index) {
+      if (productId.indexOf(productIdToInclude[index]) !== -1) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
+function satisfiesIdExcludeFilters(productIdToExclude, product) {
+  if (productIdToExclude.length) {
+    var productId = getProductIdFromStatus_(product);
+
+    for (var index = 0; index < productIdToExclude.length; ++index) {
+      if (productId.indexOf(productIdToExclude[index]) !== -1) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  return true;
+}
+
+function getProductIdFromStatus_(product) {
+  return String(
+    product.productId ||
+    product.id ||
+    product.offerId ||
+    ''
+  );
 }
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
