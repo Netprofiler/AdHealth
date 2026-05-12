@@ -1473,7 +1473,7 @@ function disapprovedProducts(
   merchantCenterId,
   productThreshold
 ) {
-  Logger.log("V4");
+  Logger.log("V5");
   var productIdToInclude = [];
   var productIdToExclude = [];
 
@@ -2710,35 +2710,23 @@ function getOrCreateLogSheet(frequency, consultantName) {
   return sheet;
 }
 
-function isDisapprovedForShopping_(productStatus) {
-  var destinationStatuses = productStatus.destinationStatuses || [];
-
-  for (var i = 0; i < destinationStatuses.length; i++) {
-    var destinationStatus = destinationStatuses[i];
-
-    var destination = String(destinationStatus.destination || '').toLowerCase();
-    var status = String(destinationStatus.status || '').toLowerCase();
-
-    if (
-      status === 'disapproved' &&
-      (
-        destination === 'shopping' ||
-        destination.indexOf('shopping') !== -1
-      )
-    ) {
-      return true;
+function checkFiltersDontContradict(productIdToInclude, productIdToExclude) {
+  if (productIdToInclude.length && productIdToExclude.length) {
+    for (var i in productIdToInclude) {
+      if (productIdToExclude.indexOf(productIdToInclude[i]) > -1) {
+        throw "Filters have shared values - can not include and exclude simultaneously";
+      }
     }
+  } else {
+    return true;
   }
-
-  return false;
 }
 
-function formatError_(e) {
-  if (!e) {
-    return 'onbekende fout';
-  }
-
-  return e.message || String(e);
+function satisfiesAllFilters(product, productIdToInclude, productIdToExclude) {
+  return (
+    satisfiesIdIncludeFilters(productIdToInclude, product) &&
+    satisfiesIdExcludeFilters(productIdToExclude, product)
+  );
 }
 
 function satisfiesIdIncludeFilters(productIdToInclude, product) {
@@ -2780,6 +2768,37 @@ function getProductIdFromStatus_(product) {
     product.offerId ||
     ''
   );
+}
+
+function isDisapprovedForShopping_(productStatus) {
+  var destinationStatuses = productStatus.destinationStatuses || [];
+
+  for (var i = 0; i < destinationStatuses.length; i++) {
+    var destinationStatus = destinationStatuses[i];
+
+    var destination = String(destinationStatus.destination || '').toLowerCase();
+    var status = String(destinationStatus.status || '').toLowerCase();
+
+    if (
+      status === 'disapproved' &&
+      (
+        destination === 'shopping' ||
+        destination.indexOf('shopping') !== -1
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function formatError_(e) {
+  if (!e) {
+    return 'onbekende fout';
+  }
+
+  return e.message || String(e);
 }
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
