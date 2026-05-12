@@ -144,33 +144,33 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
     // Send email with foundings of last run in case it timed out
     if(hour > 6){
-      sendEmail(mailadres);
+      sendEmail(mailadres, consultantName);
     }
 
     // Run checks
     if(weekDay != "Saturday" && hour < 23) {
       runChecks("Daily");
       if(hour > 6){
-        sendEmail(mailadres);
+        sendEmail(mailadres, consultantName);
       }
     }
 
     if(weekDay != "Saturday" && hour > 2 && hour < 23) {
       runChecks("Hourly");
       if(hour > 6){
-        sendEmail(mailadres);
+        sendEmail(mailadres, consultantName);
       }
     }
 
     if(weekDay == "Saturday" && 4 < hour && hour < 23) {
       runChecks("Weekly");
-      sendEmail(mailadres);
+      sendEmail(mailadres, consultantName);
     }
     if(firstDayOfTheMonth && hour == 6) {
       clearLogs("Monthly");
       runChecks("Monthly");
       sendBudget();
-      sendEmail(mailadres);
+      sendEmail(mailadres, consultantName);
     }
 
     Logger.log("All checks were finished for this round.")
@@ -2387,7 +2387,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
   }
     
-  function sendEmail(mailadres) {
+  function sendEmail(mailadres, consultantName) {
     var mainMailBodySheet = spreadsheet.getSheetByName("MailBody" + consultantName);
       
     var mailBodyData = mainMailBodySheet.getDataRange().getValues();
