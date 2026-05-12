@@ -113,6 +113,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     return;
   }
 
+  Logger.log('Account label: "' + accountLabel);
+
   if(weekDay == "Monday" && hour == 23){
     logAccounts(todayString);
   }
