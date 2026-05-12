@@ -218,7 +218,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 
       Logger.log(checkFrequency + " -- " + accountname)
       for (var j = 0; j < checkNames.length; j++) {
-        var timeOut = has45MinutesPassed();
+        var timeOut = has45MinutesPassed(startTime);
         var checkName = checkNames[j];
         var frequency = checkFrequencies[i][j];
         
@@ -605,7 +605,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     
     var accountIterator = accountSelector.get();
     while (accountIterator.hasNext()) {
-      var timeOut = has45MinutesPassed();
+      var timeOut = has45MinutesPassed(startTime);
       
       var account = accountIterator.next();
       AdsManagerApp.select(account);
@@ -766,7 +766,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         
         // Create a batch by slicing the array
         if((i + 1) % 200 == 0 || i == (deduplicatedUrls.length - 1 )){
-          var timeOut = has45MinutesPassed();
+          var timeOut = has45MinutesPassed(startTime);
           if(timeOut) break;
           try {
             //Logger.log("🟢 Running fetchAll batch of " + processBatch.length);
@@ -2584,7 +2584,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
   
   // Function to check if 45 minutes have passed since the start time
-  function has45MinutesPassed() {
+  function has45MinutesPassed(startTime) {
     // Get the current time
     var currentTime = new Date();
 
