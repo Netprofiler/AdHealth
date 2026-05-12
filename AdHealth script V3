@@ -87,12 +87,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   var weekDay = getDayOfWeek();
   var hour = getHour();
   var firstDayOfTheMonth = isTodayFirstDayOfMonth();
-  var accountLabel = settingsSheet.getRange('B3').getValue();
-  var mailadresRaw = settingsSheet.getRange('B4').getValue();
-  var mailadres = mailadresRaw.split(",");
   var startTime = new Date();
-  var dsaNaming = settingsSheet.getRange('J3').getValue();
-  var emailWhitelist = String(settingsSheet.getRange('J4').getValue() || '').toLowerCase();
+  //var dsaNaming = settingsSheet.getRange('J3').getValue();
   
   //Get right account label and emailaddress
   var accountLabel = '';
@@ -127,7 +123,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   Logger.log(shortUrl)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
-    checkAccount();
+    checkAccount(accountLabel);
     
     // Clear the logs
     if(weekDay != "Saturday" && hour == 0){
@@ -2219,7 +2215,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 // Checking if all account that have the label are in the sheet. If not, it's added.
 // Dropdown menu and default settings are added as well.  
   
-  function checkAccount() {
+  function checkAccount(accountLabel) {
     var settingsSheet = spreadsheet.getSheetByName('Settings');
 
     // Get all Google Ads account IDs from the "Settings" tab in column A.
