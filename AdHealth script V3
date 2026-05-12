@@ -2679,5 +2679,3 @@ function getOrCreateLogSheet(frequency, consultantName) {
 
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
-
-}
