@@ -538,6 +538,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
 
 //----------------------------- END DISAPPROVED ADS CHECK -----------------------------  
+
   
 //----------------------------- START CHANGE HISTORY CHECK -----------------------------
   function changeHistoryCheck(frequency, accountName, logSheet, mailbodySheet, accountId, emailWhitelist){
