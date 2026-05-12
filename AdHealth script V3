@@ -1464,8 +1464,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
   function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold){
-    {
-      if (typeof ShoppingContent === 'undefined') {
+    if (typeof ShoppingContent === 'undefined') {
         throw new Error(
           'ShoppingContent is niet beschikbaar. Zet Advanced API "Shopping Content API" aan met identifier ShoppingContent.'
         );
@@ -1560,7 +1559,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     
       return false;
     }
-  
+  }
+
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
   
 //----------------------------- START BUDGET MONITORING -----------------------------
