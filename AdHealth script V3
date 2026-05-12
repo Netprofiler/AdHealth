@@ -138,10 +138,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       
     }
     if(weekDay == "Saturday" && hour == 0){
-      clearLogs("Weekly");
+      clearLog("Weekly");
     }
     if(firstDayOfTheMonth && hour == 0){
-      clearLogs("Monthly");
+      clearLog("Monthly");
     }
 
     // Send email with foundings of last run in case it timed out
@@ -485,20 +485,20 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       var account = accountIterator.next();
       AdsManagerApp.select(account);
       var accountName = AdsApp.currentAccount().getName();
-      var whereClause = "WHERE ad_group_ad.policy_summary.approval_status = 'DISAPPROVED' AND campaign.status = 'ENABLED' AND campaign.serving_status != 'ENDED' AND ad_group.status = 'ENABLED' AND ad_group_ad.status = 'ENABLED'";
-
+      var whereClause = "WHERE ad_group_ad.policy_summary.approval_status = 'DISAPPROVED' AND campaign.status = 'ENABLED' AND campaign.serving_status != 'ENDED' AND ad_group.status = 'ENABLED' AND ad_group_ad.status = 'ENABLED' AND segments.date DURING TODAY";
+   
       var gaqlQuery = "SELECT campaign.name, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.policy_topic_entries FROM ad_group_ad "+whereClause;
 
       var results = AdsApp.search(gaqlQuery);
       while (results.hasNext()) {
         var row=results.next();
-
+        
         var campaignName = row.campaign.name;
         var adGroupName = row.adGroup.name;
         var adId = row.adGroupAd.ad.id;
         var adType = row.adGroupAd.ad.type;
         var approvalStatus = row.adGroupAd.policySummary.approvalStatus;
-        var policyTopicEntries = row.adGroupAd.policySummary.policyTopicEntries || [];
+        var policyTopicEntries = row.adGroupAd.policySummary.policyTopicEntries;
 
         var policyFindings = "";
 
@@ -1462,47 +1462,104 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- END MAX SEARCH TERM CHECK -----------------------------
   
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
-
+  
   function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold){
-    var pageToken;
-    var maxResults = 250;
-
-    var totalProducts = 0;
-    var numberDisapprovedProducts = 0;
-
-    do {
-      var productStatuses = ShoppingContent.Productstatuses.list(merchantCenterId, {
-        pageToken: pageToken,
-        maxResults: maxResults
-      });
-
-      if (productStatuses.resources) {
-        var productLimit = Math.min(productStatuses.resources.length, 1000);
-        for (var i = 0; i < productLimit; i++) {
-          var product = productStatuses.resources[i];
+    {
+      if (typeof ShoppingContent === 'undefined') {
+        throw new Error(
+          'ShoppingContent is niet beschikbaar. Zet Advanced API "Shopping Content API" aan met identifier ShoppingContent.'
+        );
+      }
+    
+      var pageToken;
+      var pageSize = 250;
+      var totalProducts = 0;
+      var numberDisapprovedProducts = 0;
+    
+      do {
+        var args = {
+          maxResults: pageSize
+        };
+    
+        if (pageToken) {
+          args.pageToken = pageToken;
+        }
+    
+        var response = ShoppingContent.Productstatuses.list(merchantCenterId, args);
+        var productStatuses = response.resources || [];
+    
+        for (var i = 0; i < productStatuses.length; i++) {
+          var productStatus = productStatuses[i];
+    
           totalProducts++;
-          if (product['destinationStatuses'][0]['status'] == 'disapproved') {
+    
+          if (isProductDisapprovedForShopping_(productStatus)) {
             numberDisapprovedProducts++;
           }
         }
-      } else {
-        Logger.log('No more products in account ' + merchantCenterId);
+    
+        pageToken = response.nextPageToken;
+      } while (pageToken);
+    
+      var disapprovalPercentage =
+        totalProducts > 0 ? (numberDisapprovedProducts * 100) / totalProducts : 0;
+    
+      Logger.log(
+        frequency + ' -- ' +
+        accountName + ' -- Disapproved products -- ' +
+        numberDisapprovedProducts + ' of ' + totalProducts +
+        ' products in your account were disapproved - ' +
+        disapprovalPercentage.toFixed(2) + '%'
+      );
+    
+      Logger.log(disapprovalPercentage + ' ' + productThreshold);
+    
+      if (disapprovalPercentage >= productThreshold) {
+        logSheet.appendRow(['Disapproved products', accountId, todayString]);
+    
+        mailbodySheet.appendRow([
+          accountName,
+          'Disapproved products',
+          '',
+          '',
+          '',
+          numberDisapprovedProducts +
+            ' of ' +
+            totalProducts +
+            ' products in your GMC (' +
+            merchantCenterId +
+            ') were disapproved - ' +
+            disapprovalPercentage.toFixed(2) +
+            '%' +
+            '\n'
+        ]);
       }
-      pageToken = productStatuses.nextPageToken;
-    } while (pageToken);
-
-    var disapprovalPercentage = totalProducts > 0 ? (numberDisapprovedProducts * 100) / totalProducts : 0;
-    Logger.log(frequency + " -- " + accountName + " -- Disapproved products -- " + numberDisapprovedProducts + ' of ' + totalProducts
-      + ' products in your account were disapproved - '
-      + disapprovalPercentage.toFixed(2) + '%');
-
-    Logger.log(disapprovalPercentage + " " + productThreshold);
-    if (disapprovalPercentage >= productThreshold) {
-      logSheet.appendRow(["Disapproved products", accountId, todayString]);
-      mailbodySheet.appendRow([accountName, "Disapproved products", "", "", "", numberDisapprovedProducts + ' of ' + totalProducts + ' products in your GMC (' + merchantCenterId + ') were disapproved - ' + disapprovalPercentage.toFixed(2) + '%' + '\n']);
+    
+      logSheet.appendRow(['Disapproved products', accountId, todayString]);
     }
-    logSheet.appendRow(["Disapproved products", accountId, todayString]);
-  }
+    
+    function isProductDisapprovedForShopping_(productStatus) {
+      var destinationStatuses = productStatus.destinationStatuses || [];
+    
+      for (var i = 0; i < destinationStatuses.length; i++) {
+        var destinationStatus = destinationStatuses[i];
+    
+        var destination = String(destinationStatus.destination || '').toLowerCase();
+        var status = String(destinationStatus.status || '').toLowerCase();
+    
+        if (
+          status === 'disapproved' &&
+          (
+            destination === 'shopping' ||
+            destination.indexOf('shopping') !== -1
+          )
+        ) {
+          return true;
+        }
+      }
+    
+      return false;
+    }
   
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
   
@@ -1841,7 +1898,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START Lin Rodnitzky Ratio -----------------------------
 
-  function linRodnitzkyRatio(frequency, accountName, logSheet, mailbodySheet, accountId){
+  function linRodnitzkyRatio(frequency, accountName, logSheet, mailbodySheet, accountId, daysToCheck){
     var accountIdClean = accountId.replace(/-/g, '');
     var today = new Date();
     var accountSelector = AdsManagerApp.accounts()
