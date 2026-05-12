@@ -1464,134 +1464,106 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
-function disapprovedProducts(
-  frequency,
-  accountName,
-  logSheet,
-  mailbodySheet,
-  accountId,
-  merchantCenterId,
-  productThreshold
-) {
+function disapprovedProducts(frequency, accountNames[i], logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold) {
   Logger.log("V5");
-  var productIdToInclude = [];
-  var productIdToExclude = [];
-
-  // Als je productThreshold als percentage invoert, bijvoorbeeld 10 voor 10%,
-  // laat dit zo staan. Niet delen door 100.
-  var pageToken;
-  var maxResults = 250;
-
-  var totalProducts = 0;
-  var numberDisapprovedProducts = 0;
-
-  checkFiltersDontContradict(productIdToInclude, productIdToExclude);
 
   if (typeof ShoppingContent === 'undefined') {
     Logger.log(
-      frequency + " -- " + accountName +
-      " -- Disapproved products -- ERROR: ShoppingContent is niet beschikbaar. " +
-      "Zet Advanced API 'Shopping Content API' aan met identifier ShoppingContent."
+      'ERROR: ShoppingContent is niet beschikbaar. ' +
+      'Zet Advanced API "Shopping Content API" aan met identifier ShoppingContent.'
     );
     return;
   }
 
-  do {
-    var args = {
-      maxResults: maxResults
-    };
+  const totalProducts = countProducts_(merchantCenterId);
+  const disapprovedProducts = countDisapprovedProducts_(merchantCenterId);
 
-    if (pageToken) {
-      args.pageToken = pageToken;
-    }
-
-    var productStatuses;
-
-    try {
-      productStatuses = ShoppingContent.Productstatuses.list(
-        merchantCenterId,
-        args
-      );
-    } catch (e) {
-      Logger.log(
-        frequency + " -- " + accountName +
-        " -- Disapproved products -- ERROR bij Merchant Center " +
-        merchantCenterId + ": " + formatError_(e)
-      );
-      return;
-    }
-
-    var resources = productStatuses.resources || [];
-
-    for (var i = 0; i < resources.length; i++) {
-      var product = resources[i];
-
-      if (!satisfiesAllFilters(product, productIdToInclude, productIdToExclude)) {
-        continue;
-      }
-
-      totalProducts++;
-
-      if (isDisapprovedForShopping_(product)) {
-        numberDisapprovedProducts++;
-      }
-    }
-
-    pageToken = productStatuses.nextPageToken;
-  } while (pageToken);
-
-  var disapprovalPercentage = 0;
-
-  if (totalProducts > 0) {
-    disapprovalPercentage = (numberDisapprovedProducts * 100) / totalProducts;
-  }
-
-  Logger.log(
-    frequency + " -- " +
-    accountName +
-    " -- Disapproved products -- " +
-    numberDisapprovedProducts +
-    " of " +
-    totalProducts +
-    " products in your account were disapproved - " +
-    disapprovalPercentage.toFixed(2) +
-    "%"
-  );
-
+  var disapprovalPercentage = (disapprovedProducts * 100) / totalProducts;
+  Logger.log(frequency + " -- " + accountName + " -- Disapproved products -- " + numberDisapprovedProducts + ' of ' + totalProducts
+    + ' products in your account were disapproved - '
+    + disapprovalPercentage.toFixed(2) + '%')
+      
   Logger.log(disapprovalPercentage + " " + productThreshold);
-
+  // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
   if (disapprovalPercentage >= productThreshold) {
-    logSheet.appendRow([
-      "Disapproved products",
-      accountId,
-      todayString
-    ]);
+    logSheet.appendRow(["Disapproved products", accountId, todayString]);
+    mailbodySheet.appendRow([accountName, "Disapproved products", "", "", "", numberDisapprovedProducts + ' of ' + totalProducts + ' products in your GMC (' + merchantCenterId + ') were disapproved - ' + disapprovalPercentage.toFixed(2) + '%' + '\n']);  
+  }
+  logSheet.appendRow(["Disapproved products", accountId, todayString]);
+}
 
-    mailbodySheet.appendRow([
-      accountName,
-      "Disapproved products",
-      "",
-      "",
-      "",
-      numberDisapprovedProducts +
-        " of " +
-        totalProducts +
-        " products in your GMC (" +
-        merchantCenterId +
-        ") were disapproved - " +
-        disapprovalPercentage.toFixed(2) +
-        "%" +
-        "\n"
-    ]);
+  function countProducts_(merchantId) {
+    let pageToken;
+    let count = 0;
+  
+    do {
+      const args = {
+        maxResults: 250
+      };
+  
+      if (pageToken) {
+        args.pageToken = pageToken;
+      }
+  
+      const response = ShoppingContent.Products.list(merchantId, args);
+      const resources = response.resources || [];
+  
+      count += resources.length;
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+  
+    return count;
+  }
+  
+  function countDisapprovedProducts_(merchantId) {
+    let pageToken;
+    let count = 0;
+  
+    do {
+      const args = {
+        maxResults: 250
+      };
+  
+      if (pageToken) {
+        args.pageToken = pageToken;
+      }
+  
+      const response = ShoppingContent.Productstatuses.list(merchantId, args);
+      const resources = response.resources || [];
+  
+      for (const productStatus of resources) {
+        if (isDisapprovedForShopping_(productStatus)) {
+          count++;
+        }
+      }
+  
+      pageToken = response.nextPageToken;
+    } while (pageToken);
+  
+    return count;
+  }
+  
+  function isDisapprovedForShopping_(productStatus) {
+    const destinationStatuses = productStatus.destinationStatuses || [];
+  
+    for (const destinationStatus of destinationStatuses) {
+      const destination = String(destinationStatus.destination || '').toLowerCase();
+      const status = String(destinationStatus.status || '').toLowerCase();
+  
+      if (
+        status === 'disapproved' &&
+        (
+          destination === String(CONFIG.DESTINATION).toLowerCase() ||
+          destination.indexOf('shopping') !== -1
+        )
+      ) {
+        return true;
+      }
+    }
+  
+    return false;
   }
 
-  // Als je altijd wilt loggen dat de check heeft gedraaid, laat deze staan.
-  // Let op: bij overschrijding log je dan dus 2 rijen, net als in je oude script.
-  logSheet.appendRow([
-    "Disapproved products",
-    accountId,
-    todayString
-  ]);
 }
   
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
@@ -2710,96 +2682,7 @@ function getOrCreateLogSheet(frequency, consultantName) {
   return sheet;
 }
 
-function checkFiltersDontContradict(productIdToInclude, productIdToExclude) {
-  if (productIdToInclude.length && productIdToExclude.length) {
-    for (var i in productIdToInclude) {
-      if (productIdToExclude.indexOf(productIdToInclude[i]) > -1) {
-        throw "Filters have shared values - can not include and exclude simultaneously";
-      }
-    }
-  } else {
-    return true;
-  }
-}
 
-function satisfiesAllFilters(product, productIdToInclude, productIdToExclude) {
-  return (
-    satisfiesIdIncludeFilters(productIdToInclude, product) &&
-    satisfiesIdExcludeFilters(productIdToExclude, product)
-  );
-}
-
-function satisfiesIdIncludeFilters(productIdToInclude, product) {
-  if (productIdToInclude.length) {
-    var productId = getProductIdFromStatus_(product);
-
-    for (var index = 0; index < productIdToInclude.length; ++index) {
-      if (productId.indexOf(productIdToInclude[index]) !== -1) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  return true;
-}
-
-function satisfiesIdExcludeFilters(productIdToExclude, product) {
-  if (productIdToExclude.length) {
-    var productId = getProductIdFromStatus_(product);
-
-    for (var index = 0; index < productIdToExclude.length; ++index) {
-      if (productId.indexOf(productIdToExclude[index]) !== -1) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  return true;
-}
-
-function getProductIdFromStatus_(product) {
-  return String(
-    product.productId ||
-    product.id ||
-    product.offerId ||
-    ''
-  );
-}
-
-function isDisapprovedForShopping_(productStatus) {
-  var destinationStatuses = productStatus.destinationStatuses || [];
-
-  for (var i = 0; i < destinationStatuses.length; i++) {
-    var destinationStatus = destinationStatuses[i];
-
-    var destination = String(destinationStatus.destination || '').toLowerCase();
-    var status = String(destinationStatus.status || '').toLowerCase();
-
-    if (
-      status === 'disapproved' &&
-      (
-        destination === 'shopping' ||
-        destination.indexOf('shopping') !== -1
-      )
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function formatError_(e) {
-  if (!e) {
-    return 'onbekende fout';
-  }
-
-  return e.message || String(e);
-}
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
 
