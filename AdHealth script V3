@@ -2219,6 +2219,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
   function checkAccount(accountLabel) {
     var settingsSheet = spreadsheet.getSheetByName('Settings');
+    Logger.log(accountLabel);
 
     // Get all Google Ads account IDs from the "Settings" tab in column A.
     var accountIdsInSheet = settingsSheet.getRange('A3:A').getValues().flat().filter(Boolean);
@@ -2228,6 +2229,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     var accountSelector = AdsManagerApp.accounts()
       .withCondition('LabelNames CONTAINS "' + accountLabel + '"');
     var accountIterator = accountSelector.get();
+    Logger.log("test account label 2");
 
     // Check which accounts aren't in the sheet yet and add them.
     while (accountIterator.hasNext()) {
