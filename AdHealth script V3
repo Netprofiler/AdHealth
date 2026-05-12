@@ -92,7 +92,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   var mailadres = mailadresRaw.split(",");
   var startTime = new Date();
   var dsaNaming = settingsSheet.getRange('J3').getValue();
-  var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
+  var emailWhitelist = String(settingsSheet.getRange('J4').getValue() || '').toLowerCase();
   
   //Get right account label and emailaddress
   var accountLabel = '';
