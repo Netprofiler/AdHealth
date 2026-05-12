@@ -125,7 +125,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   Logger.log(shortUrl)
 
   if(!newSetup && mailadres.length > 0 && accountLabel.length > 0){
-    checkAccount(accountLabel, consultantName;
+    checkAccount(accountLabel, consultantName);
     
     // Clear the logs
     if(weekDay != "Saturday" && hour == 0){
