@@ -1473,51 +1473,125 @@ function disapprovedProducts(
   merchantCenterId,
   productThreshold
 ) {
-  Logger.log("V2 disapproved products")
+  Logger.log("V3");
+  var productIdToInclude = [];
+  var productIdToExclude = [];
 
-  if (typeof MerchantApiReports === 'undefined') {
-    throw new Error(
-      'MerchantApiReports is niet beschikbaar. Zet Advanced API "Merchant API Reports sub-API" aan met identifier MerchantApiReports.'
+  // Als je productThreshold als percentage invoert, bijvoorbeeld 10 voor 10%,
+  // laat dit zo staan. Niet delen door 100.
+  var pageToken;
+  var maxResults = 250;
+
+  var totalProducts = 0;
+  var numberDisapprovedProducts = 0;
+
+  checkFiltersDontContradict(productIdToInclude, productIdToExclude);
+
+  if (typeof ShoppingContent === 'undefined') {
+    Logger.log(
+      frequency + " -- " + accountName +
+      " -- Disapproved products -- ERROR: ShoppingContent is niet beschikbaar. " +
+      "Zet Advanced API 'Shopping Content API' aan met identifier ShoppingContent."
     );
+    return;
   }
 
-  var totalProducts = countMerchantProducts_(merchantCenterId, false);
-  var numberDisapprovedProducts = countMerchantProducts_(merchantCenterId, true);
+  do {
+    var args = {
+      maxResults: maxResults
+    };
 
-  var disapprovalPercentage =
-    totalProducts > 0 ? (numberDisapprovedProducts * 100) / totalProducts : 0;
+    if (pageToken) {
+      args.pageToken = pageToken;
+    }
+
+    var productStatuses;
+
+    try {
+      productStatuses = ShoppingContent.Productstatuses.list(
+        merchantCenterId,
+        args
+      );
+    } catch (e) {
+      Logger.log(
+        frequency + " -- " + accountName +
+        " -- Disapproved products -- ERROR bij Merchant Center " +
+        merchantCenterId + ": " + formatError_(e)
+      );
+      return;
+    }
+
+    var resources = productStatuses.resources || [];
+
+    for (var i = 0; i < resources.length; i++) {
+      var product = resources[i];
+
+      if (!satisfiesAllFilters(product, productIdToInclude, productIdToExclude)) {
+        continue;
+      }
+
+      totalProducts++;
+
+      if (isDisapprovedForShopping_(product)) {
+        numberDisapprovedProducts++;
+      }
+    }
+
+    pageToken = productStatuses.nextPageToken;
+  } while (pageToken);
+
+  var disapprovalPercentage = 0;
+
+  if (totalProducts > 0) {
+    disapprovalPercentage = (numberDisapprovedProducts * 100) / totalProducts;
+  }
 
   Logger.log(
-    frequency + ' -- ' +
-    accountName + ' -- Disapproved products -- ' +
-    numberDisapprovedProducts + ' of ' + totalProducts +
-    ' products in your account were disapproved - ' +
-    disapprovalPercentage.toFixed(2) + '%'
+    frequency + " -- " +
+    accountName +
+    " -- Disapproved products -- " +
+    numberDisapprovedProducts +
+    " of " +
+    totalProducts +
+    " products in your account were disapproved - " +
+    disapprovalPercentage.toFixed(2) +
+    "%"
   );
 
-  Logger.log(disapprovalPercentage + ' ' + productThreshold);
+  Logger.log(disapprovalPercentage + " " + productThreshold);
 
   if (disapprovalPercentage >= productThreshold) {
-    logSheet.appendRow(['Disapproved products', accountId, todayString]);
+    logSheet.appendRow([
+      "Disapproved products",
+      accountId,
+      todayString
+    ]);
+
     mailbodySheet.appendRow([
       accountName,
-      'Disapproved products',
-      '',
-      '',
-      '',
+      "Disapproved products",
+      "",
+      "",
+      "",
       numberDisapprovedProducts +
-        ' of ' +
+        " of " +
         totalProducts +
-        ' products in your GMC (' +
+        " products in your GMC (" +
         merchantCenterId +
-        ') were disapproved - ' +
+        ") were disapproved - " +
         disapprovalPercentage.toFixed(2) +
-        '%' +
-        '\n'
+        "%" +
+        "\n"
     ]);
   }
 
-  logSheet.appendRow(['Disapproved products', accountId, todayString]);
+  // Als je altijd wilt loggen dat de check heeft gedraaid, laat deze staan.
+  // Let op: bij overschrijding log je dan dus 2 rijen, net als in je oude script.
+  logSheet.appendRow([
+    "Disapproved products",
+    accountId,
+    todayString
+  ]);
 }
   
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
@@ -2636,36 +2710,35 @@ function getOrCreateLogSheet(frequency, consultantName) {
   return sheet;
 }
 
-function countMerchantProducts_(merchantCenterId, onlyDisapproved) {
-  var parent = 'accounts/' + merchantCenterId;
-  var pageToken;
-  var pageSize = 1000;
-  var total = 0;
+function isDisapprovedForShopping_(productStatus) {
+  var destinationStatuses = productStatus.destinationStatuses || [];
 
-  var query = 'SELECT id FROM product_view';
+  for (var i = 0; i < destinationStatuses.length; i++) {
+    var destinationStatus = destinationStatuses[i];
 
-  if (onlyDisapproved) {
-    query += ' WHERE aggregated_reporting_context_status = "NOT_ELIGIBLE_OR_DISAPPROVED"';
+    var destination = String(destinationStatus.destination || '').toLowerCase();
+    var status = String(destinationStatus.status || '').toLowerCase();
+
+    if (
+      status === 'disapproved' &&
+      (
+        destination === 'shopping' ||
+        destination.indexOf('shopping') !== -1
+      )
+    ) {
+      return true;
+    }
   }
 
-  do {
-    var args = {
-      query: query,
-      pageSize: pageSize
-    };
+  return false;
+}
 
-    if (pageToken) {
-      args.pageToken = pageToken;
-    }
+function formatError_(e) {
+  if (!e) {
+    return 'onbekende fout';
+  }
 
-    var response = MerchantApiReports.Accounts.Reports.search(args, parent);
-    var results = response.results || [];
-
-    total += results.length;
-    pageToken = response.nextPageToken;
-  } while (pageToken);
-
-  return total;
+  return e.message || String(e);
 }
   
 //----------------------------- END OTHER FUNCTIONS -----------------------------  
