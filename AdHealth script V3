@@ -1465,7 +1465,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
 function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold) {
-  Logger.log("V6");
+  Logger.log("V7");
 
   if (typeof ShoppingContent === 'undefined') {
     Logger.log(
@@ -1563,8 +1563,6 @@ function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, ac
   
     return false;
   }
-
-}
   
 //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
   
