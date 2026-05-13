@@ -1464,8 +1464,8 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
-function disapprovedProducts(frequency, accountNames[i], logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold) {
-  Logger.log("V5");
+function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold) {
+  Logger.log("V6");
 
   if (typeof ShoppingContent === 'undefined') {
     Logger.log(
