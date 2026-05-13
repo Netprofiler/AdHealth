@@ -1465,7 +1465,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
 //----------------------------- START DISAPPROVED PRODUCTS -----------------------------
   
 function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, accountId, merchantCenterId, productThreshold) {
-  Logger.log("V7");
+  Logger.log("V8: " + merchantCenterId);
 
   if (typeof ShoppingContent === 'undefined') {
     Logger.log(
@@ -1493,6 +1493,7 @@ function disapprovedProducts(frequency, accountName, logSheet, mailbodySheet, ac
 }
 
   function countProducts_(merchantId) {
+    Logger.log("Count products");
     let pageToken;
     let count = 0;
   
