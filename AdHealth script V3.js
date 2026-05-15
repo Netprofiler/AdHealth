@@ -1,83 +1,10 @@
 function adHealthCheck(spreadsheetUrl, consultantName) {
-  //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 2.0.0");
-
-  /**
-   * Changelog - Script Updates
-   *
-   *  Version v2.0.0 – 2025-11-07
-   * - Merge multi-consultant sheets into one company sheet
-   *
-   *  Version v1.16.2 – 2025-09-23
-   * - Support multiple email addresses separated by comma
-   *
-   *  Version v1.16.1 – 2025-07-30
-   * - Run daily check first. Add end of run comment.
-   *
-   * Version v1.16 – 2025-07-29
-   * - Improve link checker to be more efficient. Check per 200 links. Fix issue with ended campaigns for active keyword check.
-   *
-   * Version v1.15 – 2025-07-29
-   * - Improve active ad and keyword check. Making it faster by using Google Ads query. Remove some logging.
-   *
-   * Version v1.14 – 2025-07-24
-   * - Exclude ended campaigns for tROAS check.
-   *
-   * Version v1.13 – 2025-07-23
-   * - Send issues left from last run, which may not been send if the script timed-out.
-   *
-   * Version v1.12 – 2025-06-24
-   * - Fixed issues related to clearing the montly log sheet.
-   *
-   * Version v1.11 – 2025-03-10
-   * - Fixed issues related to disapproved products in the script.
-   *
-   * Version v1.10 – 2025-01-29
-   * - Added UTM tagging and active keyword/ad check to the AdHealth script.
-   * - Implemented fixes for the link checker.
-   *
-   * Version v1.9 – 2024-12-09
-   * - Added check for disapproved Pmax asset groups in disapproved ads.
-   *
-   * Version v1.8 – 2024-11-28
-   * - Fixed bugs in AdHealth script.
-   *
-   * Version v1.7 – 2024-11-25
-   * - Added Lin Rodnitzky Ratio to the AdHealth script.
-   *
-   * Version v1.6 – 2024-11-01
-   * - Updated UTM script for Performance Max (Pmax) campaigns.
-   *
-   * Version v1.5 – 2024-08-19
-   * - Enabled users to whitelist their own email addresses for the unknown user check.
-   *
-   * Version v1.4 – 2024-08-02
-   * - Fixed bugs in the link checker.
-   *
-   * Version v1.3 – 2024-07-09
-   * - Bug fixes related to the clear daily log functionality.
-   *
-   * Version v1.2 – 2024-05-30
-   * - Addressed issues with the conversion recency script; applied upper limit only for budget logic.
-   *
-   * Version v1.1 – 2024-05-02
-   * - Updated budget scripting logic.
-   *
-   * Version v1.0.1 – 2024-04-11
-   * - Added tracking for days since last conversion.
-   * - General bug fixes.
-   *
-   * Version v1.0 – 2024-01-17
-   * - Initial version of the script.
-   */
-
   var spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
   var shortUrl = spreadsheetUrl;
 
   var newSetup = false;
   var newSetup = setup();
 
-  // Get variables
   var settingsSheet = spreadsheet.getSheetByName("Settings");
   var labelsSheet = spreadsheet.getSheetByName("Labels");
   var mailbodySheet = setupMailBodySheet(consultantName);
@@ -86,14 +13,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   var weekDay = getDayOfWeek();
   var hour = getHour();
   var firstDayOfTheMonth = isTodayFirstDayOfMonth();
-  //var accountLabel = settingsSheet.getRange('B3').getValue();
-  //var mailadresRaw = settingsSheet.getRange('B4').getValue();
-  //var mailadres = mailadresRaw.split(",");
   var startTime = new Date();
-  //var dsaNaming = settingsSheet.getRange('J3').getValue();
-  //var emailWhitelist = settingsSheet.getRange('J4').getValue().toLowerCase();
-
-  //Get right account label and emailaddress
   var accountLabel = "";
   var mailadres = "";
   var lastRow = labelsSheet.getLastRow();

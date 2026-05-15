@@ -1,11 +1,3 @@
-// Bridge functions for ShoppingContent. The AdHealth script is loaded via
-// eval() from GitHub; ShoppingContent calls made from inside eval'd code
-// are rejected by Google Ads Scripts with a misleading
-//   "You do not have permission to call content.products.list"
-// error, even when the auth/content scope is granted. By exposing these
-// thin wrappers in the wrapper's static source, the actual API callsite
-// lives in statically-analyzable code and the permission check passes.
-// AdHealth's countProducts_ and countDisapprovedProducts_ call these.
 function adHealthShoppingProductsList(merchantId, args) {
   return ShoppingContent.Products.list(String(merchantId), args || {});
 }
@@ -21,17 +13,14 @@ function main() {
   var spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
   var shortUrl = spreadsheetUrl;
 
-  //var scriptfile_name = "https://raw.githubusercontent.com/Netprofiler/GoogleAds/refs/heads/main/Scripts/Test%20file?token=GHSAT0AAAAAADADYSMTE3XNWIO45GD4UWUIZ7BM6OA";
   var scriptfile_name =
-    "https://raw.githubusercontent.com/Netprofiler/AdHealth/refs/heads/jurre-fixees/AdHealth%20script%20V3";
+    "https://raw.githubusercontent.com/Netprofiler/AdHealth/refs/heads/main/AdHealth%20script%20V3";
   var response = UrlFetchApp.fetch(scriptfile_name, {
     muteHttpExceptions: true,
   });
 
-  // Log the response code and full response text
   Logger.log("HTTP Response Code: " + response.getResponseCode());
 
-  // Only execute if the request was successful
   if (response.getResponseCode() === 200) {
     var scriptFile_raw = response.getContentText();
     eval(scriptFile_raw);
