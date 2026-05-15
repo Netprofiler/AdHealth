@@ -285,121 +285,122 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           Logger.log(
             checkFrequency + " -- " + accountname + " -- " + checkName,
           );
-          switch (checkName) {
-            case "Account down":
-              if (hour > 5) {
-                accountDown(
+          try {
+            switch (checkName) {
+              case "Account down":
+                if (hour > 5) {
+                  accountDown(
+                    frequency,
+                    accountNames[i],
+                    logSheet,
+                    mailbodySheet,
+                    accountId,
+                  );
+                }
+                break;
+              case "Unknown user made a change":
+                changeHistoryCheck(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                  emailWhitelist,
+                );
+                break;
+              case "Disapproved Ads":
+                disapprovedAdsCheck(
                   frequency,
                   accountNames[i],
                   logSheet,
                   mailbodySheet,
                   accountId,
                 );
-              }
-              break;
-            case "Unknown user made a change":
-              changeHistoryCheck(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-                emailWhitelist,
-              );
-              break;
-            case "Disapproved Ads":
-              disapprovedAdsCheck(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-              );
-              break;
-            case "Link Checker":
-              linkChecker(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-              );
-              break;
-            case "New conversions found":
-              newConvCheck(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-              );
-              break;
-            case "UTM tagging":
-              var applyTagging = checkFrequencies[i][j];
-              if (applyTagging) {
-                utmTagging(
+                break;
+              case "Link Checker":
+                linkChecker(
                   frequency,
                   accountNames[i],
                   logSheet,
                   mailbodySheet,
                   accountId,
                 );
-              }
-              break;
-            case "Target ROAS check":
-              var positionMinTROAS =
-                checkNames.indexOf("Minimum target ROAS amount") +
-                columnCorrection;
-              var minTRoas = settingsSheet
-                .getRange(rowNumber, positionMinTROAS)
-                .getValue();
-              tROASCheck(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-                minTRoas,
-              );
-              break;
-            case "Active ad or keyword":
-              activeAdOrKeyword(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-              );
-              break;
-            case "Search term CPC check":
-              var positionMaxSearchTermCpc =
-                checkNames.indexOf("Search term CPC amount") + columnCorrection;
-              var maxSearchTermCpc = settingsSheet
-                .getRange(rowNumber, positionMaxSearchTermCpc)
-                .getValue();
-              maxSearchTermCpcCheck(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-                maxSearchTermCpc,
-              );
-              break;
-            case "Disapproved products":
-              var merchantCenterIdPosition =
-                checkNames.indexOf("Merchant Center ID") + columnCorrection;
-              var merchantCenterId = settingsSheet
-                .getRange(rowNumber, merchantCenterIdPosition)
-                .getValue();
-              var productThresholdPosition =
-                checkNames.indexOf("Acceptable % of disapproved products") +
-                columnCorrection;
-              var productThreshold = settingsSheet
-                .getRange(rowNumber, productThresholdPosition)
-                .getValue();
-              if (merchantCenterId && productThreshold) {
-                try {
+                break;
+              case "New conversions found":
+                newConvCheck(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                );
+                break;
+              case "UTM tagging":
+                var applyTagging = checkFrequencies[i][j];
+                if (applyTagging) {
+                  utmTagging(
+                    frequency,
+                    accountNames[i],
+                    logSheet,
+                    mailbodySheet,
+                    accountId,
+                  );
+                }
+                break;
+              case "Target ROAS check":
+                var positionMinTROAS =
+                  checkNames.indexOf("Minimum target ROAS amount") +
+                  columnCorrection;
+                var minTRoas = settingsSheet
+                  .getRange(rowNumber, positionMinTROAS)
+                  .getValue();
+                tROASCheck(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                  minTRoas,
+                );
+                break;
+              case "Active ad or keyword":
+                activeAdOrKeyword(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                );
+                break;
+              case "Search term CPC check":
+                var positionMaxSearchTermCpc =
+                  checkNames.indexOf("Search term CPC amount") +
+                  columnCorrection;
+                var maxSearchTermCpc = settingsSheet
+                  .getRange(rowNumber, positionMaxSearchTermCpc)
+                  .getValue();
+                maxSearchTermCpcCheck(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                  maxSearchTermCpc,
+                );
+                break;
+              case "Disapproved products":
+                var merchantCenterIdPosition =
+                  checkNames.indexOf("Merchant Center ID") + columnCorrection;
+                var merchantCenterId = settingsSheet
+                  .getRange(rowNumber, merchantCenterIdPosition)
+                  .getValue();
+                var productThresholdPosition =
+                  checkNames.indexOf("Acceptable % of disapproved products") +
+                  columnCorrection;
+                var productThreshold = settingsSheet
+                  .getRange(rowNumber, productThresholdPosition)
+                  .getValue();
+                if (merchantCenterId && productThreshold) {
                   disapprovedProducts(
                     frequency,
                     accountNames[i],
@@ -409,87 +410,92 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
                     merchantCenterId,
                     productThreshold,
                   );
-                } catch (err) {
-                  Logger.log(
-                    "Disapproved products error | name=" +
-                      err.name +
-                      " | message=" +
-                      err.message +
-                      " | stack=" +
-                      (err.stack || "(no stack)"),
-                  );
                 }
-              }
-              break;
-            case "Budget monitoring":
-              var campaignTypePosition =
-                checkNames.indexOf("Only Shopping/ Pmax/Search") +
-                columnCorrection;
-              var campaignType = settingsSheet
-                .getRange(rowNumber, campaignTypePosition)
-                .getValue();
-              var limitTypePosition =
-                checkNames.indexOf("Upper limit only") + columnCorrection;
-              var limitType = settingsSheet
-                .getRange(rowNumber, limitTypePosition)
-                .getValue();
-              budgetMonitoring(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-                accountBudget,
-                campaignType,
-                checkNames,
-                rowNumber,
-                limitType,
-                columnCorrection,
-              );
-              break;
-            case "Conversion recency check":
-              var daysToCheckPosition =
-                checkNames.indexOf("Days since last conversion") +
-                columnCorrection;
-              var daysToCheck = settingsSheet
-                .getRange(rowNumber, daysToCheckPosition)
-                .getValue();
-              daysSinceLastConversion(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-                daysToCheck,
-              );
-              break;
-            case "Lin Rodnitzky Ratio":
-              linRodnitzkyRatio(
-                frequency,
-                accountNames[i],
-                logSheet,
-                mailbodySheet,
-                accountId,
-              );
-              break;
-            case "Merchant Center ID check":
-              var positionMerchantCenterId =
-                checkNames.indexOf("Merchant Center ID") + columnCorrection;
-              var MerchantCenterId = settingsSheet
-                .getRange(rowNumber, positionMerchantCenterId)
-                .getValue();
-              if (!MerchantCenterId) {
-                merchantCenterIdCheck(
+                break;
+              case "Budget monitoring":
+                var campaignTypePosition =
+                  checkNames.indexOf("Only Shopping/ Pmax/Search") +
+                  columnCorrection;
+                var campaignType = settingsSheet
+                  .getRange(rowNumber, campaignTypePosition)
+                  .getValue();
+                var limitTypePosition =
+                  checkNames.indexOf("Upper limit only") + columnCorrection;
+                var limitType = settingsSheet
+                  .getRange(rowNumber, limitTypePosition)
+                  .getValue();
+                budgetMonitoring(
                   frequency,
                   accountNames[i],
                   logSheet,
                   mailbodySheet,
                   accountId,
+                  accountBudget,
+                  campaignType,
+                  checkNames,
                   rowNumber,
-                  positionMerchantCenterId,
+                  limitType,
+                  columnCorrection,
                 );
-              }
-              break;
+                break;
+              case "Conversion recency check":
+                var daysToCheckPosition =
+                  checkNames.indexOf("Days since last conversion") +
+                  columnCorrection;
+                var daysToCheck = settingsSheet
+                  .getRange(rowNumber, daysToCheckPosition)
+                  .getValue();
+                daysSinceLastConversion(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                  daysToCheck,
+                );
+                break;
+              case "Lin Rodnitzky Ratio":
+                linRodnitzkyRatio(
+                  frequency,
+                  accountNames[i],
+                  logSheet,
+                  mailbodySheet,
+                  accountId,
+                );
+                break;
+              case "Merchant Center ID check":
+                var positionMerchantCenterId =
+                  checkNames.indexOf("Merchant Center ID") + columnCorrection;
+                var existingMerchantCenterId = settingsSheet
+                  .getRange(rowNumber, positionMerchantCenterId)
+                  .getValue();
+                if (!existingMerchantCenterId) {
+                  merchantCenterIdCheck(
+                    frequency,
+                    accountNames[i],
+                    logSheet,
+                    mailbodySheet,
+                    accountId,
+                    rowNumber,
+                    positionMerchantCenterId,
+                  );
+                }
+                break;
+            }
+          } catch (err) {
+            Logger.log(
+              checkFrequency +
+                " -- " +
+                accountname +
+                " -- " +
+                checkName +
+                " FAILED | name=" +
+                err.name +
+                " | message=" +
+                err.message +
+                " | stack=" +
+                (err.stack || "(no stack)"),
+            );
           }
         } else if (alreadyRun) {
           //Logger.log(checkName + " already run")
@@ -2073,8 +2079,6 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     merchantCenterId,
     productThreshold,
   ) {
-    Logger.log("V8: " + merchantCenterId);
-
     if (typeof ShoppingContent === "undefined") {
       Logger.log(
         "ERROR: ShoppingContent is niet beschikbaar. " +
@@ -2086,8 +2090,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     const totalProducts = countProducts_(merchantCenterId);
     const disapprovedCount = countDisapprovedProducts_(merchantCenterId);
 
-    var disapprovalPercentage =
-      totalProducts > 0 ? (disapprovedCount * 100) / totalProducts : 0;
+    // productThreshold is stored as a decimal ratio (e.g. 0.05 for 5%) to
+    // match Google Sheets' "%" cell formatting. We compare ratios, and
+    // multiply by 100 only when rendering for humans.
+    var disapprovalRatio =
+      totalProducts > 0 ? disapprovedCount / totalProducts : 0;
+    var disapprovalPctDisplay = (disapprovalRatio * 100).toFixed(2);
     Logger.log(
       frequency +
         " -- " +
@@ -2097,13 +2105,12 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         " of " +
         totalProducts +
         " products in your account were disapproved - " +
-        disapprovalPercentage.toFixed(2) +
+        disapprovalPctDisplay +
         "%",
     );
 
-    Logger.log(disapprovalPercentage + " " + productThreshold);
     // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
-    if (disapprovalPercentage >= productThreshold) {
+    if (disapprovalRatio >= productThreshold) {
       mailbodySheet.appendRow([
         accountName,
         "Disapproved products",
@@ -2116,7 +2123,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           " products in your GMC (" +
           merchantCenterId +
           ") were disapproved - " +
-          disapprovalPercentage.toFixed(2) +
+          disapprovalPctDisplay +
           "%" +
           "\n",
       ]);
