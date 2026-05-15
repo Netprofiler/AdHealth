@@ -14,7 +14,7 @@ function main() {
   var shortUrl = spreadsheetUrl;
 
   var scriptfile_name =
-    "https://raw.githubusercontent.com/Netprofiler/AdHealth/refs/heads/main/AdHealth%20script%20V3";
+    "https://raw.githubusercontent.com/Netprofiler/AdHealth/refs/heads/main/AdHealth%20script%20V3.js";
   var response = UrlFetchApp.fetch(scriptfile_name, {
     muteHttpExceptions: true,
   });
