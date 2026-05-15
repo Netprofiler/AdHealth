@@ -1,0 +1,27 @@
+function main() {
+  var yourName = "Jurre";
+  var spreadsheetUrl =
+    "https://docs.google.com/spreadsheets/d/1siQcbqKS9sh1IdBcWs1lz32Xkj5UueOyHeEwX3dTLWc/edit?gid=1718322055#gid=1718322055"; // Replace with your spreadsheet URL
+  var spreadsheet = SpreadsheetApp.openByUrl(spreadsheetUrl);
+  var shortUrl = spreadsheetUrl;
+
+  //var scriptfile_name = "https://raw.githubusercontent.com/Netprofiler/GoogleAds/refs/heads/main/Scripts/Test%20file?token=GHSAT0AAAAAADADYSMTE3XNWIO45GD4UWUIZ7BM6OA";
+  var scriptfile_name =
+    "https://raw.githubusercontent.com/Netprofiler/AdHealth/refs/heads/jurre-fixees/AdHealth%20script%20V3";
+  var response = UrlFetchApp.fetch(scriptfile_name, {
+    muteHttpExceptions: true,
+  });
+
+  // Log the response code and full response text
+  Logger.log("HTTP Response Code: " + response.getResponseCode());
+
+  // Only execute if the request was successful
+  if (response.getResponseCode() === 200) {
+    var scriptFile_raw = response.getContentText();
+    eval(scriptFile_raw);
+    Logger.log("Completed");
+    var script = new adHealthCheck(spreadsheetUrl, yourName);
+  } else {
+    Logger.log("Error fetching script: " + response.getContentText());
+  }
+}
