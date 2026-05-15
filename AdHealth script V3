@@ -2084,15 +2084,16 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     }
 
     const totalProducts = countProducts_(merchantCenterId);
-    const disapprovedProducts = countDisapprovedProducts_(merchantCenterId);
+    const disapprovedCount = countDisapprovedProducts_(merchantCenterId);
 
-    var disapprovalPercentage = (disapprovedProducts * 100) / totalProducts;
+    var disapprovalPercentage =
+      totalProducts > 0 ? (disapprovedCount * 100) / totalProducts : 0;
     Logger.log(
       frequency +
         " -- " +
         accountName +
         " -- Disapproved products -- " +
-        numberDisapprovedProducts +
+        disapprovedCount +
         " of " +
         totalProducts +
         " products in your account were disapproved - " +
@@ -2103,14 +2104,13 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     Logger.log(disapprovalPercentage + " " + productThreshold);
     // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
     if (disapprovalPercentage >= productThreshold) {
-      logSheet.appendRow(["Disapproved products", accountId, todayString]);
       mailbodySheet.appendRow([
         accountName,
         "Disapproved products",
         "",
         "",
         "",
-        numberDisapprovedProducts +
+        disapprovedCount +
           " of " +
           totalProducts +
           " products in your GMC (" +
@@ -2121,6 +2121,9 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           "\n",
       ]);
     }
+    // Always mark as run today: ShoppingContent listing is quota-heavy
+    // (counts every product + every product status). Re-running mid-day
+    // would burn quota unnecessarily.
     logSheet.appendRow(["Disapproved products", accountId, todayString]);
   }
 
@@ -2193,11 +2196,9 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       ).toLowerCase();
       const status = String(destinationStatus.status || "").toLowerCase();
 
-      if (
-        status === "disapproved" &&
-        (destination === String(CONFIG.DESTINATION).toLowerCase() ||
-          destination.indexOf("shopping") !== -1)
-      ) {
+      // Match any shopping-related destination (shopping_ads,
+      // free_shopping_listings, free_local_listings, etc.).
+      if (status === "disapproved" && destination.indexOf("shopping") !== -1) {
         return true;
       }
     }
