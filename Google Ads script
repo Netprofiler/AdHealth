@@ -1,3 +1,19 @@
+// Bridge functions for ShoppingContent. The AdHealth script is loaded via
+// eval() from GitHub; ShoppingContent calls made from inside eval'd code
+// are rejected by Google Ads Scripts with a misleading
+//   "You do not have permission to call content.products.list"
+// error, even when the auth/content scope is granted. By exposing these
+// thin wrappers in the wrapper's static source, the actual API callsite
+// lives in statically-analyzable code and the permission check passes.
+// AdHealth's countProducts_ and countDisapprovedProducts_ call these.
+function adHealthShoppingProductsList(merchantId, args) {
+  return ShoppingContent.Products.list(String(merchantId), args || {});
+}
+
+function adHealthShoppingProductstatusesList(merchantId, args) {
+  return ShoppingContent.Productstatuses.list(String(merchantId), args || {});
+}
+
 function main() {
   var yourName = "Jurre";
   var spreadsheetUrl =

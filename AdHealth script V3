@@ -2124,38 +2124,15 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     logSheet.appendRow(["Disapproved products", accountId, todayString]);
   }
 
+  // NOTE: Calls to ShoppingContent.* must go via the wrapper's bridge
+  // functions (adHealthShoppingProductsList /
+  // adHealthShoppingProductstatusesList). Calling ShoppingContent directly
+  // from this file fails with a misleading "permission" error because the
+  // callsite lives inside eval'd code and is not statically visible to
+  // Google Ads Scripts' permission check. The bridge functions live in the
+  // wrapper script's static source so the callsite passes the check.
   function countProducts_(merchantId) {
     var merchantIdStr = String(merchantId).trim();
-    Logger.log(
-      "Count products | merchantId=" +
-        merchantId +
-        " (type=" +
-        typeof merchantId +
-        ", asString='" +
-        merchantIdStr +
-        "')",
-    );
-
-    // Diagnostic probe: minimal call with hard-coded literal to see if the
-    // failure is parameter-related or genuinely OAuth/context-related.
-    try {
-      var probe = ShoppingContent.Products.list(merchantIdStr, {
-        maxResults: 1,
-      });
-      Logger.log(
-        "Probe OK | resources=" +
-          (probe.resources ? probe.resources.length : 0),
-      );
-    } catch (probeErr) {
-      Logger.log(
-        "Probe FAILED | name=" +
-          probeErr.name +
-          " | message=" +
-          probeErr.message,
-      );
-      throw probeErr;
-    }
-
     let pageToken;
     let count = 0;
 
@@ -2168,7 +2145,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         args.pageToken = pageToken;
       }
 
-      const response = ShoppingContent.Products.list(merchantIdStr, args);
+      const response = adHealthShoppingProductsList(merchantIdStr, args);
       const resources = response.resources || [];
 
       count += resources.length;
@@ -2192,10 +2169,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         args.pageToken = pageToken;
       }
 
-      const response = ShoppingContent.Productstatuses.list(
-        merchantIdStr,
-        args,
-      );
+      const response = adHealthShoppingProductstatusesList(merchantIdStr, args);
       const resources = response.resources || [];
 
       for (const productStatus of resources) {
