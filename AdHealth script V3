@@ -410,7 +410,14 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
                     productThreshold,
                   );
                 } catch (err) {
-                  Logger.log(err.message);
+                  Logger.log(
+                    "Disapproved products error | name=" +
+                      err.name +
+                      " | message=" +
+                      err.message +
+                      " | stack=" +
+                      (err.stack || "(no stack)"),
+                  );
                 }
               }
               break;
@@ -2118,7 +2125,37 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
 
   function countProducts_(merchantId) {
-    Logger.log("Count products");
+    var merchantIdStr = String(merchantId).trim();
+    Logger.log(
+      "Count products | merchantId=" +
+        merchantId +
+        " (type=" +
+        typeof merchantId +
+        ", asString='" +
+        merchantIdStr +
+        "')",
+    );
+
+    // Diagnostic probe: minimal call with hard-coded literal to see if the
+    // failure is parameter-related or genuinely OAuth/context-related.
+    try {
+      var probe = ShoppingContent.Products.list(merchantIdStr, {
+        maxResults: 1,
+      });
+      Logger.log(
+        "Probe OK | resources=" +
+          (probe.resources ? probe.resources.length : 0),
+      );
+    } catch (probeErr) {
+      Logger.log(
+        "Probe FAILED | name=" +
+          probeErr.name +
+          " | message=" +
+          probeErr.message,
+      );
+      throw probeErr;
+    }
+
     let pageToken;
     let count = 0;
 
@@ -2131,7 +2168,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         args.pageToken = pageToken;
       }
 
-      const response = ShoppingContent.Products.list(merchantId, args);
+      const response = ShoppingContent.Products.list(merchantIdStr, args);
       const resources = response.resources || [];
 
       count += resources.length;
@@ -2142,6 +2179,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
   }
 
   function countDisapprovedProducts_(merchantId) {
+    var merchantIdStr = String(merchantId).trim();
     let pageToken;
     let count = 0;
 
@@ -2154,7 +2192,10 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         args.pageToken = pageToken;
       }
 
-      const response = ShoppingContent.Productstatuses.list(merchantId, args);
+      const response = ShoppingContent.Productstatuses.list(
+        merchantIdStr,
+        args,
+      );
       const resources = response.resources || [];
 
       for (const productStatus of resources) {
