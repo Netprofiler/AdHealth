@@ -579,7 +579,7 @@ function adHealthCheck(spreadsheetUrl) {
          ad_group_ad.status = 'ENABLED' 
          AND ad_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND campaign.end_date_time_time > '` + todayString + `' 
+         AND ampaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -601,7 +601,7 @@ function adHealthCheck(spreadsheetUrl) {
         WHERE 
          asset_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND campaign.end_date_time_time > '` + todayString + `' 
+         AND ampaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -642,12 +642,12 @@ function adHealthCheck(spreadsheetUrl) {
           asset.final_urls, 
           campaign.status, 
           campaign.experiment_type, 
-          campaign.end_date_time_time 
+          ampaign.end_date_time 
         FROM campaign_asset 
         WHERE 
           campaign_asset.status = 'ENABLED' 
           AND campaign.status = 'ENABLED' 
-          AND campaign.end_date_time_time > '` + todayString + `' 
+          AND ampaign.end_date_time > '` + todayString + `' 
           AND campaign.experiment_type != 'EXPERIMENT'  
         `
       );
