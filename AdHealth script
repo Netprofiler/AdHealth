@@ -1,6 +1,6 @@
 function adHealthCheck(spreadsheetUrl) {
   //var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1gXOIsBG6fKAfGVyV8zco0_UThAKvUssDsfEtIVLzkog/edit?gid=1718322055#gid=1718322055'; // Replace with your spreadsheet URL
-  Logger.log("Good job, you're using the latest version: 1.16.2")
+  Logger.log("Good job, you're using the latest version: 1.16.3")
 
   /**
  * Changelog - Script Updates
@@ -579,7 +579,7 @@ function adHealthCheck(spreadsheetUrl) {
          ad_group_ad.status = 'ENABLED' 
          AND ad_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND ampaign.end_date_time > '` + todayString + `' 
+         AND campaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -601,7 +601,7 @@ function adHealthCheck(spreadsheetUrl) {
         WHERE 
          asset_group.status = 'ENABLED' 
          AND campaign.status = 'ENABLED'
-         AND ampaign.end_date_time > '` + todayString + `' 
+         AND campaign.end_date_time > '` + todayString + `' 
          AND campaign.experiment_type != 'EXPERIMENT' 
         `
       );
@@ -642,12 +642,12 @@ function adHealthCheck(spreadsheetUrl) {
           asset.final_urls, 
           campaign.status, 
           campaign.experiment_type, 
-          ampaign.end_date_time 
+          campaign.end_date_time 
         FROM campaign_asset 
         WHERE 
           campaign_asset.status = 'ENABLED' 
           AND campaign.status = 'ENABLED' 
-          AND ampaign.end_date_time > '` + todayString + `' 
+          AND campaign.end_date_time > '` + todayString + `' 
           AND campaign.experiment_type != 'EXPERIMENT'  
         `
       );
