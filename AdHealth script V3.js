@@ -2006,16 +2006,17 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
       );
       return;
     }
-
-    const totalProducts = countProducts_(merchantCenterId);
-    const disapprovedCount = countDisapprovedProducts_(merchantCenterId);
-
-    // productThreshold is stored as a decimal ratio (e.g. 0.05 for 5%) to
-    // match Google Sheets' "%" cell formatting. We compare ratios, and
-    // multiply by 100 only when rendering for humans.
+  
+    const productStatusCounts = countProductStatuses_(merchantCenterId);
+  
+    const totalProducts = productStatusCounts.totalProducts;
+    const disapprovedCount = productStatusCounts.disapprovedProducts;
+  
     var disapprovalRatio =
       totalProducts > 0 ? disapprovedCount / totalProducts : 0;
+  
     var disapprovalPctDisplay = (disapprovalRatio * 100).toFixed(2);
+  
     Logger.log(
       frequency +
         " -- " +
@@ -2028,8 +2029,7 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
         disapprovalPctDisplay +
         "%",
     );
-
-    // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
+  
     if (disapprovalRatio >= productThreshold) {
       mailbodySheet.appendRow([
         accountName,
@@ -2048,91 +2048,62 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           "\n",
       ]);
     }
-    // Always mark as run today: ShoppingContent listing is quota-heavy
-    // (counts every product + every product status). Re-running mid-day
-    // would burn quota unnecessarily.
+  
     logSheet.appendRow(["Disapproved products", accountId, todayString]);
   }
 
-  // NOTE: Calls to ShoppingContent.* must go via the wrapper's bridge
-  // functions (adHealthShoppingProductsList /
-  // adHealthShoppingProductstatusesList). Calling ShoppingContent directly
-  // from this file fails with a misleading "permission" error because the
-  // callsite lives inside eval'd code and is not statically visible to
-  // Google Ads Scripts' permission check. The bridge functions live in the
-  // wrapper script's static source so the callsite passes the check.
-  function countProducts_(merchantId) {
+  function countProductStatuses_(merchantId) {
     var merchantIdStr = String(merchantId).trim();
     let pageToken;
-    let count = 0;
-
+    let totalProducts = 0;
+    let disapprovedProducts = 0;
+  
     do {
       const args = {
         maxResults: 250,
       };
-
+  
       if (pageToken) {
         args.pageToken = pageToken;
       }
-
-      const response = adHealthShoppingProductsList(merchantIdStr, args);
-      const resources = response.resources || [];
-
-      count += resources.length;
-      pageToken = response.nextPageToken;
-    } while (pageToken);
-
-    return count;
-  }
-
-  function countDisapprovedProducts_(merchantId) {
-    var merchantIdStr = String(merchantId).trim();
-    let pageToken;
-    let count = 0;
-
-    do {
-      const args = {
-        maxResults: 250,
-      };
-
-      if (pageToken) {
-        args.pageToken = pageToken;
-      }
-
+  
       const response = adHealthShoppingProductstatusesList(merchantIdStr, args);
       const resources = response.resources || [];
-
+  
       for (const productStatus of resources) {
+        totalProducts++;
+  
         if (isDisapprovedForShopping_(productStatus)) {
-          count++;
+          disapprovedProducts++;
         }
       }
-
+  
       pageToken = response.nextPageToken;
     } while (pageToken);
-
-    return count;
+  
+    return {
+      totalProducts: totalProducts,
+      disapprovedProducts: disapprovedProducts,
+    };
   }
 
   function isDisapprovedForShopping_(productStatus) {
     const destinationStatuses = productStatus.destinationStatuses || [];
-
+  
     for (const destinationStatus of destinationStatuses) {
       const destination = String(
         destinationStatus.destination || "",
       ).toLowerCase();
       const status = String(destinationStatus.status || "").toLowerCase();
-
-      // Match any shopping-related destination (shopping_ads,
-      // free_shopping_listings, free_local_listings, etc.).
+  
       if (status === "disapproved" && destination.indexOf("shopping") !== -1) {
         return true;
       }
     }
-
+  
     return false;
   }
-
+  
   //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
 
   //----------------------------- START BUDGET MONITORING -----------------------------
