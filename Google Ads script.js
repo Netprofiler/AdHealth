@@ -1,9 +1,7 @@
-function adHealthShoppingProductsList(merchantId, args) {
-  return ShoppingContent.Products.list(String(merchantId), args || {});
-}
-
-function adHealthShoppingProductstatusesList(merchantId, args) {
-  return ShoppingContent.Productstatuses.list(String(merchantId), args || {});
+function adHealthMerchantProductsList(merchantId, args) {
+  var parent = "accounts/" + String(merchantId).trim();
+  var options = args || {};
+  return MerchantApiProducts.Accounts.Products.list(parent, options);
 }
 
 function main() {

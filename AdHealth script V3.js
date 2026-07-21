@@ -1999,16 +1999,17 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     merchantCenterId,
     productThreshold,
   ) {
-    if (typeof ShoppingContent === "undefined") {
+    if (typeof MerchantApiProducts === "undefined") {
       Logger.log(
-        "ERROR: ShoppingContent is niet beschikbaar. " +
-          'Zet Advanced API "Shopping Content API" aan met identifier ShoppingContent.',
+        "ERROR: MerchantApiProducts is niet beschikbaar. " +
+          'Zet Advanced API "Merchant API Products" aan met identifier MerchantApiProducts.',
       );
       return;
     }
 
-    const totalProducts = countProducts_(merchantCenterId);
-    const disapprovedCount = countDisapprovedProducts_(merchantCenterId);
+    const productStats = countProductStats_(merchantCenterId);
+    const totalProducts = productStats.total;
+    const disapprovedCount = productStats.disapproved;
 
     // productThreshold is stored as a decimal ratio (e.g. 0.05 for 5%) to
     // match Google Sheets' "%" cell formatting. We compare ratios, and
@@ -2048,84 +2049,65 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
           "\n",
       ]);
     }
-    // Always mark as run today: ShoppingContent listing is quota-heavy
-    // (counts every product + every product status). Re-running mid-day
-    // would burn quota unnecessarily.
+    // Always mark as run today: Merchant API listing is quota-heavy
+    // (paginates every product). Re-running mid-day would burn quota
+    // unnecessarily.
     logSheet.appendRow(["Disapproved products", accountId, todayString]);
   }
 
-  // NOTE: Calls to ShoppingContent.* must go via the wrapper's bridge
-  // functions (adHealthShoppingProductsList /
-  // adHealthShoppingProductstatusesList). Calling ShoppingContent directly
-  // from this file fails with a misleading "permission" error because the
-  // callsite lives inside eval'd code and is not statically visible to
-  // Google Ads Scripts' permission check. The bridge functions live in the
-  // wrapper script's static source so the callsite passes the check.
-  function countProducts_(merchantId) {
+  // NOTE: Calls to MerchantApiProducts.* must go via the wrapper's bridge
+  // function (adHealthMerchantProductsList). Calling MerchantApiProducts
+  // directly from this file fails with a misleading "permission" error
+  // because the callsite lives inside eval'd code and is not statically
+  // visible to Google Ads Scripts' permission check. The bridge function
+  // lives in the wrapper script's static source so the callsite passes
+  // the check.
+  function countProductStats_(merchantId) {
     var merchantIdStr = String(merchantId).trim();
     let pageToken;
-    let count = 0;
+    let total = 0;
+    let disapproved = 0;
 
     do {
       const args = {
-        maxResults: 250,
+        pageSize: 1000,
       };
 
       if (pageToken) {
         args.pageToken = pageToken;
       }
 
-      const response = adHealthShoppingProductsList(merchantIdStr, args);
-      const resources = response.resources || [];
+      const response = adHealthMerchantProductsList(merchantIdStr, args);
+      const products = response.products || [];
 
-      count += resources.length;
-      pageToken = response.nextPageToken;
-    } while (pageToken);
-
-    return count;
-  }
-
-  function countDisapprovedProducts_(merchantId) {
-    var merchantIdStr = String(merchantId).trim();
-    let pageToken;
-    let count = 0;
-
-    do {
-      const args = {
-        maxResults: 250,
-      };
-
-      if (pageToken) {
-        args.pageToken = pageToken;
-      }
-
-      const response = adHealthShoppingProductstatusesList(merchantIdStr, args);
-      const resources = response.resources || [];
-
-      for (const productStatus of resources) {
-        if (isDisapprovedForShopping_(productStatus)) {
-          count++;
+      for (const product of products) {
+        total++;
+        if (isDisapprovedForShopping_(product)) {
+          disapproved++;
         }
       }
 
       pageToken = response.nextPageToken;
     } while (pageToken);
 
-    return count;
+    return { total: total, disapproved: disapproved };
   }
 
-  function isDisapprovedForShopping_(productStatus) {
+  function isDisapprovedForShopping_(product) {
+    const productStatus = product.productStatus || {};
     const destinationStatuses = productStatus.destinationStatuses || [];
 
     for (const destinationStatus of destinationStatuses) {
-      const destination = String(
-        destinationStatus.destination || "",
-      ).toLowerCase();
-      const status = String(destinationStatus.status || "").toLowerCase();
+      const reportingContext = String(
+        destinationStatus.reportingContext || "",
+      ).toUpperCase();
+      const disapprovedCountries = destinationStatus.disapprovedCountries || [];
 
-      // Match any shopping-related destination (shopping_ads,
-      // free_shopping_listings, free_local_listings, etc.).
-      if (status === "disapproved" && destination.indexOf("shopping") !== -1) {
+      // Match any shopping-related destination (SHOPPING_ADS, etc.).
+      if (
+        disapprovedCountries.length > 0 &&
+        reportingContext.indexOf("SHOPPING") !== -1
+      ) {
         return true;
       }
     }
