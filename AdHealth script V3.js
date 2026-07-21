@@ -1999,111 +1999,170 @@ function adHealthCheck(spreadsheetUrl, consultantName) {
     merchantCenterId,
     productThreshold,
   ) {
-    if (typeof ShoppingContent === "undefined") {
+    try {
+      const productStats = countProductStats_(merchantCenterId);
+      const totalProducts = productStats.total;
+      const disapprovedCount = productStats.disapproved;
+      const productsApi = productStats.api || "unknown";
+
+      // productThreshold is stored as a decimal ratio (e.g. 0.05 for 5%) to
+      // match Google Sheets' "%" cell formatting. We compare ratios, and
+      // multiply by 100 only when rendering for humans.
+      var disapprovalRatio =
+        totalProducts > 0 ? disapprovedCount / totalProducts : 0;
+      var disapprovalPctDisplay = (disapprovalRatio * 100).toFixed(2);
       Logger.log(
-        "ERROR: ShoppingContent is niet beschikbaar. " +
-          'Zet Advanced API "Shopping Content API" aan met identifier ShoppingContent.',
-      );
-      return;
-    }
-  
-    const productStatusCounts = countProductStatuses_(merchantCenterId);
-  
-    const totalProducts = productStatusCounts.totalProducts;
-    const disapprovedCount = productStatusCounts.disapprovedProducts;
-  
-    var disapprovalRatio =
-      totalProducts > 0 ? disapprovedCount / totalProducts : 0;
-  
-    var disapprovalPctDisplay = (disapprovalRatio * 100).toFixed(2);
-  
-    Logger.log(
-      frequency +
-        " -- " +
-        accountName +
-        " -- Disapproved products -- " +
-        disapprovedCount +
-        " of " +
-        totalProducts +
-        " products in your account were disapproved - " +
-        disapprovalPctDisplay +
-        "%",
-    );
-  
-    if (disapprovalRatio >= productThreshold) {
-      mailbodySheet.appendRow([
-        accountName,
-        "Disapproved products",
-        "",
-        "",
-        "",
-        disapprovedCount +
+        frequency +
+          " -- " +
+          accountName +
+          " -- Disapproved products -- " +
+          disapprovedCount +
           " of " +
           totalProducts +
-          " products in your GMC (" +
-          merchantCenterId +
-          ") were disapproved - " +
+          " products in your account were disapproved - " +
           disapprovalPctDisplay +
           "%" +
-          "\n",
-      ]);
+          " (via " +
+          productsApi +
+          " API)",
+      );
+
+      // If our threshold is exceeded then we assemble an email with details of the alert and send it to our contact emails.
+      if (disapprovalRatio >= productThreshold) {
+        mailbodySheet.appendRow([
+          accountName,
+          "Disapproved products",
+          "",
+          "",
+          "",
+          disapprovedCount +
+            " of " +
+            totalProducts +
+            " products in your GMC (" +
+            merchantCenterId +
+            ") were disapproved - " +
+            disapprovalPctDisplay +
+            "%" +
+            "\n",
+        ]);
+      }
+      // Always mark as run today: Merchant API listing is quota-heavy
+      // (paginates every product). Re-running mid-day would burn quota
+      // unnecessarily.
+      logSheet.appendRow(["Disapproved products", accountId, todayString]);
+    } catch (err) {
+      Logger.log(
+        frequency +
+          " -- " +
+          accountName +
+          " -- Disapproved products FAILED | message=" +
+          err.message,
+      );
     }
-  
-    logSheet.appendRow(["Disapproved products", accountId, todayString]);
   }
 
-  function countProductStatuses_(merchantId) {
+  // NOTE: Merchant Center API calls must go via the wrapper bridge functions
+  // (adHealthListProducts / adHealthListProductStatuses). The wrapper prefers
+  // Merchant API and falls back to Shopping Content until 2026-08-18.
+  function countProductStats_(merchantId) {
     var merchantIdStr = String(merchantId).trim();
-    let pageToken;
-    let totalProducts = 0;
-    let disapprovedProducts = 0;
-  
+    var pageToken;
+    var total = 0;
+    var disapproved = 0;
+    var api = "unknown";
+
     do {
-      const args = {
-        maxResults: 250,
-      };
-  
+      var args = { pageSize: 1000 };
       if (pageToken) {
         args.pageToken = pageToken;
       }
-  
-      const response = adHealthShoppingProductstatusesList(merchantIdStr, args);
-      const resources = response.resources || [];
-  
-      for (const productStatus of resources) {
-        totalProducts++;
-  
-        if (isDisapprovedForShopping_(productStatus)) {
-          disapprovedProducts++;
+
+      var response = adHealthListProducts(merchantIdStr, args);
+      api = response.api;
+      var products = response.products || [];
+
+      if (api === "merchant") {
+        for (var i = 0; i < products.length; i++) {
+          total++;
+          if (isDisapprovedForShopping_(products[i], api)) {
+            disapproved++;
+          }
         }
+      } else {
+        total += products.length;
       }
-  
+
       pageToken = response.nextPageToken;
     } while (pageToken);
-  
-    return {
-      totalProducts: totalProducts,
-      disapprovedProducts: disapprovedProducts,
-    };
+
+    if (api === "shopping_content") {
+      pageToken = undefined;
+      do {
+        var statusArgs = { maxResults: 250 };
+        if (pageToken) {
+          statusArgs.pageToken = pageToken;
+        }
+
+        var statusResponse = adHealthListProductStatuses(
+          merchantIdStr,
+          statusArgs,
+        );
+        var statuses = statusResponse.resources || [];
+
+        for (var j = 0; j < statuses.length; j++) {
+          if (isDisapprovedForShopping_(statuses[j], api)) {
+            disapproved++;
+          }
+        }
+
+        pageToken = statusResponse.nextPageToken;
+      } while (pageToken);
+    }
+
+    return { total: total, disapproved: disapproved, api: api };
   }
 
-  function isDisapprovedForShopping_(productStatus) {
-    const destinationStatuses = productStatus.destinationStatuses || [];
-  
-    for (const destinationStatus of destinationStatuses) {
-      const destination = String(
-        destinationStatus.destination || "",
+  function isDisapprovedForShopping_(item, api) {
+    if (api === "merchant") {
+      var productStatus = item.productStatus || {};
+      var destinationStatuses = productStatus.destinationStatuses || [];
+
+      for (var i = 0; i < destinationStatuses.length; i++) {
+        var destinationStatus = destinationStatuses[i];
+        var reportingContext = String(
+          destinationStatus.reportingContext || "",
+        ).toUpperCase();
+        var disapprovedCountries = destinationStatus.disapprovedCountries || [];
+
+        if (
+          disapprovedCountries.length > 0 &&
+          reportingContext.indexOf("SHOPPING") !== -1
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    var legacyStatuses = item.destinationStatuses || [];
+    for (var j = 0; j < legacyStatuses.length; j++) {
+      var legacyDestination = String(
+        legacyStatuses[j].destination || "",
       ).toLowerCase();
-      const status = String(destinationStatus.status || "").toLowerCase();
-  
-      if (status === "disapproved" && destination.indexOf("shopping") !== -1) {
+      var legacyStatus = String(legacyStatuses[j].status || "").toLowerCase();
+
+      if (
+        legacyStatus === "disapproved" &&
+        legacyDestination.indexOf("shopping") !== -1
+      ) {
         return true;
       }
     }
-  
+
     return false;
   }
-  
+
   //----------------------------- END DISAPPROVED PRODUCTS -----------------------------
 
   //----------------------------- START BUDGET MONITORING -----------------------------
